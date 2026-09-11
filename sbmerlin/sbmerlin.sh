@@ -50,8 +50,9 @@ sbm_cmd_stop() {
 	return 0
 }
 
-# Rebuild everything from the current settings without a full stop/start when
-# possible — a config change should not drop existing connections needlessly.
+# Rebuild everything from the current settings. sing-box has no config reload,
+# so this restarts the core — existing connections drop. The config is validated
+# first, so a bad edit never takes the running service down.
 sbm_cmd_apply() {
 	sbm_require_jq
 	sbm_settings_init

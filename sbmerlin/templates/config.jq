@@ -125,6 +125,10 @@ def rule_target($r):
         { ip_is_private: true, outbound: "direct" } ]
       # Clients pinned to one group enter through their own inbound.
       + [ $forced[] | { inbound: ("tproxy-" + .), outbound: ("grp-" + .) } ]
+      # Lists flagged "always direct" (RU sites, gov sites) win over user rules:
+      # sending those abroad is what gets accounts blocked.
+      + ( [ $geo_sets[] | select(.direct // false) | .id ]
+          | if length > 0 then [ { rule_set: ., outbound: "direct" } ] else [] end )
       + [ $rules[] | . as $r
           | ( {}
               + (if (($r.match.rule_set // []) | length) > 0 then { rule_set: $r.match.rule_set } else {} end)
