@@ -96,7 +96,12 @@ function sbmRenderSettings() {
 	$('#set-dnsremote').val((g.dns && g.dns.remote) || 'https://1.1.1.1/dns-query');
 	$('#set-loglevel').val(g.log_level || 'warn');
 	$('#set-debugport').val(g.debug_port || 0);
-	$('#set-hint').html('«auto» для локального DNS означает резолвер провайдера из настроек WAN. ' +
+	$('#set-socksport').val(g.socks_port || 0);
+	$('#set-socksuser').val(g.socks_user || '');
+	$('#set-sockspass').val(g.socks_pass || '');
+	$('#set-hint').html('SOCKS5/HTTP прокси доступен устройствам сети по адресу роутера на указанном порту ' +
+		'(0 — выключен); в приложении укажите SOCKS5 или HTTP, один и тот же порт понимает оба. ' +
+		'«auto» для локального DNS означает резолвер провайдера из настроек WAN. ' +
 		'Отладочный порт открывает HTTP/SOCKS прокси на 127.0.0.1 — удобно проверить, ' +
 		'куда уходит конкретный домен, командой <code>curl -x http://127.0.0.1:ПОРТ https://ipinfo.io/ip</code>.');
 }
@@ -136,22 +141,39 @@ function sbmRenderServers() {
 	});
 }
 
+var PROTOCOLS = ['http', 'tls', 'quic', 'bittorrent', 'dns', 'stun', 'ssh'];
+var INBOUNDS = [
+	['lan', 'перехват LAN'],
+	['socks', 'SOCKS-прокси'],
+	['pinned', 'привязанные устройства']
+];
+var EDITING = -1;
+
+/* The table shows every parameter of a rule except the lists themselves, which
+ * are only counted here and edited in the dialog. */
 function sbmRenderRules() {
 	var tb = $('#rl-table tbody').empty();
 	(S.rules || []).forEach(function (r, i) {
-		var matchText = sbmMatchText(r.match);
+		var m = r.match || {};
+		var counts = [];
+		var nd = (m.domain || []).length + (m.domain_suffix || []).length + (m.domain_keyword || []).length;
+		var ni = (m.ip_cidr || []).length;
+		var ns = (m.rule_set || []).length;
+		if (ns) counts.push(ns + ' списк.');
+		if (nd) counts.push(nd + ' домен.');
+		if (ni) counts.push(ni + ' IP');
+		var ports = (m.port || []).concat(m.port_range || []).join(', ');
+
 		tb.append('<tr>' +
-			'<td><input type="text" size="16" value="' + (r.name || '') + '" ' +
-				'onchange="sbmSet(\'rules\',' + i + ',\'name\',this.value)"/></td>' +
-			'<td><input type="text" style="width:98%" value="' + matchText.replace(/"/g, '&quot;') + '" ' +
-				'onchange="sbmSetMatch(' + i + ',this.value)" ' +
-				'placeholder="example.com, *keyword*, 1.2.3.0/24, список:rkn-domains"/></td>' +
-			'<td><select onchange="sbmSet(\'rules\',' + i + ',\'action\',this.value)">' +
-				groupOptions(r.action, [['direct', 'Напрямую'], ['block', 'Блокировать']]) + '</select></td>' +
-			'<td><select onchange="sbmSet(\'rules\',' + i + ',\'on_fail\',this.value)">' +
-				'<option value="block"' + (r.on_fail !== 'direct' ? ' selected' : '') + '>Блокировать</option>' +
-				'<option value="direct"' + (r.on_fail === 'direct' ? ' selected' : '') + '>Пустить напрямую</option>' +
-				'</select></td>' +
+			'<td><span class="sbm-link" onclick="sbmEditOpen(' + i + ')">' +
+				(r.name || 'без имени') + '</span></td>' +
+			'<td>' + sbmActionLabel(r.action) + '</td>' +
+			'<td class="sbm-muted">' + (r.on_fail === 'direct' ? 'напрямую' : 'блок') + '</td>' +
+			'<td class="sbm-muted">' + (m.network || 'любая') + '</td>' +
+			'<td class="sbm-muted">' + ((m.protocol || []).join(', ') || '—') + '</td>' +
+			'<td class="sbm-muted">' + (ports || '—') + '</td>' +
+			'<td class="sbm-muted">' + sbmInboundLabel(m.inbound) + '</td>' +
+			'<td class="sbm-muted">' + (counts.join(', ') || '—') + '</td>' +
 			'<td><input type="checkbox"' + (r.enabled !== false ? ' checked' : '') +
 				' onchange="sbmSet(\'rules\',' + i + ',\'enabled\',this.checked)"/></td>' +
 			'<td><span class="sbm-del" onclick="sbmMove(' + i + ',-1)">↑</span> ' +
@@ -160,6 +182,116 @@ function sbmRenderRules() {
 	});
 	$('#rl-final').html(groupOptions((S.general && S.general.final) || 'direct', [['direct', 'Напрямую']]))
 		.off('change').on('change', function () { S.general.final = this.value; });
+}
+
+function sbmActionLabel(a) {
+	if (a === 'direct') return 'Напрямую';
+	if (a === 'block') return 'Блокировать';
+	if ((a || '').indexOf('group:') === 0) {
+		var id = a.slice(6);
+		var g = (S.groups || []).filter(function (x) { return x.id === id; })[0];
+		return g ? (g.name || g.id) : id;
+	}
+	return a || '—';
+}
+
+function sbmInboundLabel(list) {
+	if (!list || !list.length) return 'любой';
+	return list.map(function (k) {
+		var f = INBOUNDS.filter(function (x) { return x[0] === k; })[0];
+		return f ? f[1] : k;
+	}).join(', ');
+}
+
+/* ---------- rule editor ---------- */
+function sbmEditOpen(idx) {
+	EDITING = idx;
+	var r = S.rules[idx];
+	var m = r.match || {};
+
+	$('#ed-name').val(r.name || '');
+	$('#ed-action').html(groupOptions(r.action, [['direct', 'Напрямую'], ['block', 'Блокировать']]));
+	$('#ed-onfail').val(r.on_fail === 'direct' ? 'direct' : 'block');
+	$('#ed-network').val(m.network || '');
+	$('#ed-ports').val((m.port || []).concat(m.port_range || []).join(', '));
+
+	$('#ed-proto').html(PROTOCOLS.map(function (p) {
+		var on = (m.protocol || []).indexOf(p) >= 0;
+		return '<label><input type="checkbox" class="ed-proto-cb" value="' + p + '"' +
+			(on ? ' checked' : '') + '/>' + p + '</label>';
+	}).join(''));
+
+	$('#ed-inbound').html(INBOUNDS.map(function (p) {
+		var on = (m.inbound || []).indexOf(p[0]) >= 0;
+		return '<label><input type="checkbox" class="ed-in-cb" value="' + p[0] + '"' +
+			(on ? ' checked' : '') + '/>' + p[1] + '</label>';
+	}).join(''));
+
+	$('#ed-domains').val([]
+		.concat(m.domain || [])
+		.concat((m.domain_suffix || []).map(function (d) { return '*.' + d; }))
+		.concat((m.domain_keyword || []).map(function (d) { return '*' + d + '*'; }))
+		.join('\n'));
+	$('#ed-ips').val((m.ip_cidr || []).join('\n'));
+	$('#ed-sets').val((m.rule_set || []).join('\n'));
+
+	$('#rl-editor').addClass('open');
+}
+
+function sbmEditClose() {
+	$('#rl-editor').removeClass('open');
+	EDITING = -1;
+}
+
+function sbmEditSave() {
+	if (EDITING < 0) return;
+	var r = S.rules[EDITING];
+	var m = { domain: [], domain_suffix: [], domain_keyword: [], ip_cidr: [],
+		rule_set: [], port: [], port_range: [], protocol: [], inbound: [] };
+
+	r.name = $('#ed-name').val() || 'без имени';
+	r.action = $('#ed-action').val();
+	r.on_fail = $('#ed-onfail').val();
+
+	var net = $('#ed-network').val();
+	if (net) m.network = net;
+
+	$('#ed-ports').val().split(/[,\s]+/).forEach(function (p) {
+		p = p.trim();
+		if (!p) return;
+		/* sing-box writes a range as 100:200, people write it as 100-200 */
+		if (p.indexOf('-') > 0) m.port_range.push(p.replace('-', ':'));
+		else if (p.indexOf(':') > 0) m.port_range.push(p);
+		else m.port.push(p);
+	});
+
+	$('.ed-proto-cb:checked').each(function () { m.protocol.push(this.value); });
+	$('.ed-in-cb:checked').each(function () { m.inbound.push(this.value); });
+
+	$('#ed-domains').val().split(/[\n,]+/).forEach(function (d) {
+		d = d.trim();
+		if (!d) return;
+		if (d.charAt(0) === '*' && d.charAt(d.length - 1) === '*') m.domain_keyword.push(d.slice(1, -1));
+		else if (d.indexOf('*.') === 0) m.domain_suffix.push(d.slice(2));
+		else if (d.charAt(0) === '.') m.domain_suffix.push(d.slice(1));
+		else m.domain.push(d);
+	});
+	$('#ed-ips').val().split(/[\n,\s]+/).forEach(function (d) {
+		d = d.trim();
+		if (!d) return;
+		m.ip_cidr.push(d.indexOf('/') > 0 ? d : (d.indexOf(':') > 0 ? d + '/128' : d + '/32'));
+	});
+	$('#ed-sets').val().split(/[\n,\s]+/).forEach(function (d) {
+		d = d.trim();
+		if (d) m.rule_set.push(d);
+	});
+
+	Object.keys(m).forEach(function (k) {
+		if (Array.isArray(m[k]) && !m[k].length) delete m[k];
+	});
+	r.match = m;
+	sbmEditClose();
+	sbmRenderRules();
 }
 
 function sbmRenderClients() {
@@ -265,8 +397,9 @@ function sbmMatchText(m) {
 function sbmAddRule() {
 	S.rules = S.rules || [];
 	S.rules.push({ id: 'r' + Date.now(), name: 'Новое правило', enabled: true,
-		match: { domain_suffix: [] }, action: 'direct', on_fail: 'block' });
+		match: {}, action: 'direct', on_fail: 'block' });
 	sbmRenderRules();
+	sbmEditOpen(S.rules.length - 1);
 }
 
 function sbmAddClient() {
@@ -320,6 +453,11 @@ function sbmCollectSettings() {
 	S.general.mem_limit_mb = parseInt($('#set-mem').val()) || 48;
 	S.general.log_level = $('#set-loglevel').val();
 	S.general.debug_port = parseInt($('#set-debugport').val()) || 0;
+	// Remember the previous port so the firewall can withdraw its old ACCEPT rule.
+	S.general.socks_port_prev = S.general.socks_port || 0;
+	S.general.socks_port = parseInt($('#set-socksport').val()) || 0;
+	S.general.socks_user = $('#set-socksuser').val() || '';
+	S.general.socks_pass = $('#set-sockspass').val() || '';
 	S.general.watchdog = S.general.watchdog || {};
 	S.general.watchdog.enabled = true;
 	S.general.watchdog.rss_limit_mb = parseInt($('#set-rss').val()) || 96;
@@ -368,3 +506,4 @@ function sbmRun(service, extraSettings, message) {
 		$('#sbm-saved').text('Готово — состояние обновлено');
 	}, 12000);
 }
+/* marker */

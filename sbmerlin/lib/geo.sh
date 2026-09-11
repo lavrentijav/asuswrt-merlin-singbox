@@ -73,7 +73,23 @@ sbm_geo_update() {
 		fi
 
 		_raw="$SBM_RUN_DIR/sbm_geo_$_id.raw"
-		if ! sbm_fetch "$_url" "$_raw"; then
+		# A list may be assembled from several sources (Telegram, for one, lives in
+		# three separate ASNs); .urls wins over .url and the parts are concatenated.
+		_urls=$("$SBM_JQ" -r --arg i "$_id" '.geo[] | select(.id == $i) | (.urls // [])[]' "$SBM_SETTINGS")
+		if [ -n "$_urls" ]; then
+			: > "$_raw"
+			_ok=0
+			for _u in $_urls; do
+				if sbm_fetch "$_u" "$_raw.part"; then
+					cat "$_raw.part" >> "$_raw"
+					_ok=1
+				else
+					sbm_warn "geo $_id: part failed: $_u"
+				fi
+				rm -f "$_raw.part"
+			done
+			[ "$_ok" = "1" ] || { sbm_warn "geo $_id: every source failed"; rm -f "$_raw"; continue; }
+		elif ! sbm_fetch "$_url" "$_raw"; then
 			sbm_warn "geo $_id: download failed"
 			rm -f "$_raw"
 			continue

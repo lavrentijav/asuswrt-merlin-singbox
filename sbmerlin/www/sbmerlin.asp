@@ -39,6 +39,25 @@
 	overflow:auto; font-size:11px; line-height:1.35; border-radius:4px; }
 #sbm .sbm-del { color:#ff9b9b; cursor:pointer; font-weight:bold; }
 #sbm .sbm-note { background:#3f4f54; border-left:3px solid #6aa5b8; padding:8px 10px; margin:8px 0; font-size:12px; }
+#sbm .sbm-link { color:#8fd0e8; cursor:pointer; text-decoration:underline dotted; }
+#sbm .sbm-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:999; }
+#sbm .sbm-modal.open { display:block; }
+#sbm .sbm-modal-box { position:absolute; top:4%; left:50%; transform:translateX(-50%);
+	width:1010px; max-width:96vw; max-height:92vh; overflow:auto;
+	background:#2f3e44; border:1px solid #1b2528; border-radius:6px; box-shadow:0 10px 40px rgba(0,0,0,.6); }
+#sbm .sbm-modal-head { background:#1f6f5c; color:#fff; padding:8px 12px; font-weight:bold;
+	display:flex; justify-content:space-between; align-items:center; }
+#sbm .sbm-close { cursor:pointer; font-weight:bold; }
+#sbm .sbm-modal-body { padding:12px; }
+#sbm .sbm-modal-foot { padding:10px 12px; border-top:1px solid #24343a; display:flex; gap:8px; align-items:center; }
+#sbm .sbm-form { display:grid; grid-template-columns:190px 1fr; gap:8px 10px; align-items:center; margin-bottom:12px; }
+#sbm .sbm-form label { color:#a9c0c9; }
+#sbm .sbm-checks { display:flex; gap:14px; flex-wrap:wrap; }
+#sbm .sbm-checks label { display:flex; align-items:center; gap:5px; background:#3f4f54;
+	padding:4px 10px; border-radius:4px; cursor:pointer; color:#dfe9ec; }
+#sbm .sbm-cols { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+#sbm .sbm-col-title { margin-bottom:4px; color:#a9c0c9; font-weight:bold; font-size:12px; }
+#sbm .sbm-cols textarea { width:97%; }
 </style>
 <script>
 var custom_settings = <% get_custom_settings(); %>;
@@ -140,11 +159,17 @@ var custom_settings = <% get_custom_settings(); %>;
 					<!-- RULES -->
 					<div class="sbm-panel" id="panel-rules">
 						<div class="sbm-note">Правила применяются сверху вниз — первое совпадение выигрывает.
-							«Если группа недоступна» задаёт поведение при полном отказе направления.</div>
+							Нажмите на название правила, чтобы открыть детальные настройки.</div>
 						<table class="sbm-grid" id="rl-table"><thead><tr>
-							<th style="width:150px">Название</th><th>Что совпадает</th>
-							<th style="width:130px">Куда</th><th style="width:120px">Если группа мертва</th>
-							<th style="width:50px">Вкл</th><th style="width:60px"></th>
+							<th style="width:170px">Псевдоним</th>
+							<th style="width:110px">Куда</th>
+							<th style="width:105px">Если мертва</th>
+							<th style="width:60px">Сеть</th>
+							<th style="width:110px">Протокол</th>
+							<th style="width:95px">Порты</th>
+							<th style="width:95px">Откуда</th>
+							<th style="width:150px">Содержимое</th>
+							<th style="width:45px">Вкл</th><th style="width:70px"></th>
 						</tr></thead><tbody></tbody></table>
 						<div class="sbm-actions">
 							<input class="button_gen" type="button" value="Добавить правило" onclick="sbmAddRule()"/>
@@ -201,6 +226,9 @@ var custom_settings = <% get_custom_settings(); %>;
 								<option value="error">error</option><option value="warn">warn</option>
 								<option value="info">info</option><option value="debug">debug</option>
 							</select>
+							<span>SOCKS5/HTTP прокси для устройств, порт</span><input type="text" id="set-socksport" size="6"/>
+							<span>Логин к прокси (не обязательно)</span><input type="text" id="set-socksuser" size="16"/>
+							<span>Пароль к прокси</span><input type="text" id="set-sockspass" size="16"/>
 							<span>Отладочный HTTP-прокси, порт</span><input type="text" id="set-debugport" size="6"/>
 						</div>
 						<div class="sbm-note" id="set-hint"></div>
@@ -212,6 +240,77 @@ var custom_settings = <% get_custom_settings(); %>;
 							<input class="button_gen" type="button" value="Обновить" onclick="sbmLoadLog()"/>
 						</div>
 						<pre class="sbm-log" id="log-body">—</pre>
+					</div>
+
+					<!-- RULE EDITOR -->
+					<div class="sbm-modal" id="rl-editor">
+						<div class="sbm-modal-box">
+							<div class="sbm-modal-head">
+								<span>Детальные настройки правила маршрутизации</span>
+								<span class="sbm-close" onclick="sbmEditClose()">✕</span>
+							</div>
+							<div class="sbm-modal-body">
+								<div class="sbm-form">
+									<label>Псевдоним</label>
+									<div><input type="text" id="ed-name" style="width:97%"/></div>
+
+									<label>Куда (outbound)</label>
+									<div>
+										<select id="ed-action" style="width:220px"></select>
+										<span class="sbm-muted" style="margin-left:8px">направление или страна из вкладки «Серверы»</span>
+									</div>
+
+									<label>Если группа недоступна</label>
+									<div>
+										<select id="ed-onfail" style="width:220px">
+											<option value="block">Блокировать (kill switch)</option>
+											<option value="direct">Пустить напрямую</option>
+										</select>
+									</div>
+
+									<label>Порты</label>
+									<div>
+										<input type="text" id="ed-ports" style="width:220px" placeholder="443, 50000-65535"/>
+										<span class="sbm-muted" style="margin-left:8px">через запятую, диапазон через дефис</span>
+									</div>
+
+									<label>Протокол</label>
+									<div id="ed-proto" class="sbm-checks"></div>
+
+									<label>Сеть</label>
+									<div>
+										<select id="ed-network" style="width:220px">
+											<option value="">любая</option>
+											<option value="tcp">tcp</option>
+											<option value="udp">udp</option>
+										</select>
+									</div>
+
+									<label>Откуда (inbound)</label>
+									<div id="ed-inbound" class="sbm-checks"></div>
+								</div>
+
+								<div class="sbm-cols">
+									<div>
+										<div class="sbm-col-title">Домены <span class="sbm-muted">по одному в строке</span></div>
+										<textarea id="ed-domains" rows="9" placeholder="example.com&#10;*.example.org&#10;*keyword*"></textarea>
+									</div>
+									<div>
+										<div class="sbm-col-title">IP-адрес или сеть CIDR</div>
+										<textarea id="ed-ips" rows="9" placeholder="1.2.3.4&#10;91.108.56.0/22&#10;2001:b28:f23d::/48"></textarea>
+									</div>
+									<div>
+										<div class="sbm-col-title">Списки <span class="sbm-muted">geosite:/geoip:/свои</span></div>
+										<textarea id="ed-sets" rows="9" placeholder="geosite:youtube&#10;geoip:ru&#10;rkn-domains"></textarea>
+									</div>
+								</div>
+							</div>
+							<div class="sbm-modal-foot">
+								<input class="button_gen" type="button" value="Сохранить правило" onclick="sbmEditSave()"/>
+								<input class="button_gen" type="button" value="Отмена" onclick="sbmEditClose()"/>
+								<span class="sbm-muted">Изменения попадут на роутер после кнопки «Применить настройки»</span>
+							</div>
+						</div>
 					</div>
 
 					<div style="margin-top:16px; text-align:center;">

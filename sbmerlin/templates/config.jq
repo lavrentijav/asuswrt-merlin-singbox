@@ -106,6 +106,16 @@ def rule_target($r):
        then [ { type: "mixed", tag: "debug-in", listen: "127.0.0.1",
                 listen_port: ($s.general.debug_port | tonumber) } ]
        else [] end)
+    # SOCKS5/HTTP proxy offered to the LAN, for clients that should pick the proxy
+    # themselves (a browser profile, a phone app) instead of being intercepted.
+    + (if (($s.general.socks_port // 0) | tonumber) > 0
+       then [ ({ type: "mixed", tag: "socks-in", listen: "::",
+                 listen_port: ($s.general.socks_port | tonumber) }
+               + (if (($s.general.socks_user // "") != "")
+                  then { users: [ { username: $s.general.socks_user,
+                                    password: ($s.general.socks_pass // "") } ] }
+                  else {} end)) ]
+       else [] end)
   ),
 
   outbounds: (
@@ -148,6 +158,15 @@ def rule_target($r):
               + (if (($r.match.port_range // []) | length) > 0 then { port_range: $r.match.port_range } else {} end)
               + (if (($r.match.protocol // []) | length) > 0 then { protocol: $r.match.protocol } else {} end)
               + (if (($r.match.network // "") != "") then { network: [$r.match.network] } else {} end)
+              # Which entry point the traffic came through: LAN interception, the
+              # LAN SOCKS proxy, or a pinned device's own inbound.
+              + (if (($r.match.inbound // []) | length) > 0
+                 then { inbound: [ $r.match.inbound[] | . as $i
+                        | if $i == "lan" then "tproxy-in"
+                          elif $i == "socks" then "socks-in"
+                          elif $i == "pinned" then ($forced[] | "tproxy-" + .)
+                          else $i end ] }
+                 else {} end)
               + (if (($r.match.source_ip_cidr // []) | length) > 0 then { source_ip_cidr: $r.match.source_ip_cidr } else {} end)
             ) as $m
           | select(($m | length) > 0)

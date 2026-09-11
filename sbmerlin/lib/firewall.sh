@@ -124,8 +124,31 @@ sbm_firewall_up() {
 		_sbm_ipt -t nat -A PREROUTING -i "$_lan" -p tcp -j "$SBM_CHAIN"
 	fi
 
+	sbm_socks_open "$_lan"
 	sbm_info "firewall up in $_mode mode on $_lan ($_lanip)"
 	echo "$_mode"
+}
+
+# The LAN-facing SOCKS/HTTP port has to be accepted explicitly: the firmware's
+# INPUT chain drops anything it does not know about.
+sbm_socks_open() {
+	_lan="${1:-$(sbm_lan_if)}"
+	_port=$(sbm_json_get "$SBM_SETTINGS" '.general.socks_port' 0)
+	[ "$_port" -gt 0 ] 2>/dev/null || return 0
+	_sbm_ipt -I INPUT -i "$_lan" -p tcp --dport "$_port" -j ACCEPT
+	_sbm_ipt -I INPUT -i "$_lan" -p udp --dport "$_port" -j ACCEPT
+	sbm_info "SOCKS5/HTTP proxy open on $(sbm_lan_ip):$_port for $_lan"
+}
+
+sbm_socks_close() {
+	_lan=$(sbm_lan_if)
+	for _p in $(sbm_json_get "$SBM_SETTINGS" '.general.socks_port' 0) \
+	          $(sbm_json_get "$SBM_SETTINGS" '.general.socks_port_prev' 0); do
+		[ "$_p" -gt 0 ] 2>/dev/null || continue
+		while _sbm_ipt -D INPUT -i "$_lan" -p tcp --dport "$_p" -j ACCEPT; do :; done
+		while _sbm_ipt -D INPUT -i "$_lan" -p udp --dport "$_p" -j ACCEPT; do :; done
+	done
+	return 0
 }
 
 # Traffic that must never be proxied, in both table variants.
@@ -165,6 +188,7 @@ sbm_node_server_ips() {
 
 sbm_firewall_down() {
 	_lan=$(sbm_lan_if)
+	sbm_socks_close
 	while _sbm_ipt -t mangle -D PREROUTING -i "$_lan" -j "$SBM_CHAIN"; do :; done
 	while _sbm_ipt -t nat -D PREROUTING -i "$_lan" -p tcp -j "$SBM_CHAIN"; do :; done
 	_sbm_ipt -t mangle -F "$SBM_CHAIN"; _sbm_ipt -t mangle -X "$SBM_CHAIN"
