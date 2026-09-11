@@ -1,0 +1,16 @@
+# sbmerlin — infrastructure of the VPN provider itself: panel, subscription,
+# node hostnames and their CDNs.
+#
+# These must always go DIRECT. Routing them through the proxy makes the tunnel
+# depend on itself: when a node dies, the client can no longer reach the panel
+# or refresh its subscription to recover, and the router keeps retrying through
+# a dead path.
+#
+# One domain per line; subdomains are matched automatically.
+fire-core.ru
+core-fire.ru
+tele-forge.ru
+boykisser.online
+boy-kisser.ru
+femboy.house
+spmam.ru

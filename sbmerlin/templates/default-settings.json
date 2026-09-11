@@ -26,6 +26,16 @@
   "clients": [],
   "geo": [
     {
+      "id": "provider-direct",
+      "name": "Инфраструктура VPN-провайдера (панель, подписка, узлы)",
+      "url": "https://raw.githubusercontent.com/lavrentijav/asuswrt-merlin-singbox/main/sbmerlin/lists/provider-direct.lst",
+      "format": "plain-domain",
+      "target": "srs",
+      "interval_h": 24,
+      "direct": true,
+      "enabled": true
+    },
+    {
       "id": "rkn-domains",
       "name": "РКН: заблокированные домены (Re-filter)",
       "url": "https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/domains_all.lst",

@@ -1,5 +1,26 @@
 [
   {
+    "id": "provider",
+    "name": "Инфраструктура VPN-провайдера — всегда напрямую",
+    "enabled": true,
+    "match": {
+      "domain_suffix": [
+        "fire-core.ru",
+        "core-fire.ru",
+        "tele-forge.ru",
+        "boykisser.online",
+        "boy-kisser.ru",
+        "femboy.house",
+        "spmam.ru"
+      ],
+      "rule_set": [
+        "provider-direct"
+      ]
+    },
+    "action": "direct",
+    "on_fail": "direct"
+  },
+  {
     "id": "ads",
     "name": "Мусор — реклама и трекеры",
     "enabled": true,

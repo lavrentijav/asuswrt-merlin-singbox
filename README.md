@@ -30,7 +30,7 @@
 
 ```bash
 mkdir -p /jffs/addons/sbmerlin && cd /jffs/addons/sbmerlin
-curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/lavrentijav/asuswrt-merlin-singbox/main/install.sh | sh
 ```
 
 Либо вручную: скопировать каталог `sbmerlin/` в `/jffs/addons/sbmerlin/` и выполнить
@@ -68,6 +68,11 @@ sh /jffs/addons/sbmerlin/sbmerlin.sh install
    Готовый набор правил для России лежит в `sbmerlin/templates/rules-ru.json`
    (реклама в блок, торренты и РФ напрямую, дальше по категориям: видео, музыка,
    соцсети, AI, игры, IT, новости, инфраструктура).
+   Первым правилом идёт **инфраструктура самого VPN-провайдера** (панель, подписка,
+   адреса узлов) — она всегда направляется напрямую. Иначе туннель начинает зависеть
+   от самого себя: когда узел падает, роутер уже не может достучаться до панели и
+   обновить подписку, чтобы восстановиться. Список лежит в
+   `sbmerlin/lists/provider-direct.lst` и обновляется по расписанию.
 3. Вкладка **Geo-списки** — включите нужные (по умолчанию: домены РКН, сервисы против РФ,
    российские сайты и госсайты напрямую, российские IP в ipset).
 4. Вкладка **Настройки** — включите sing-box и нажмите «Применить настройки».
