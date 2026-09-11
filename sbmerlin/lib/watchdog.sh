@@ -8,8 +8,14 @@
 # is exactly the kill-switch behaviour.
 
 sbm_watchdog() {
+	# The WebUI lives in tmpfs; httpd restarts and firmware events can wipe it.
+	if [ ! -f "$SBM_EXT_DIR/settings.json" ] || ! grep -q sbmerlin "$SBM_MENU_SRC" 2>/dev/null; then
+		sbm_mount_ui
+		sbm_export_ui
+	fi
+
 	_enabled=$(sbm_json_get "$SBM_SETTINGS" '.general.enabled' false)
-	[ "$_enabled" = "true" ] || return 0
+	[ "$_enabled" = "true" ] || { sbm_write_status; return 0; }
 
 	if ! sbm_running; then
 		sbm_warn "core not running — restarting"

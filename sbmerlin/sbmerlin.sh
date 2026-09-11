@@ -25,8 +25,13 @@ SBM_HOOKS="services-start firewall-start service-event post-mount unmount dnsmas
 sbm_cmd_start() {
 	sbm_require_jq
 	sbm_settings_init
+	# /www/user and /www/ext are the same tmpfs directory and are wiped on every
+	# boot, so the page and its data files have to be put back on each start.
+	sbm_mount_ui
+	sbm_export_ui
 	[ "$(sbm_json_get "$SBM_SETTINGS" '.general.enabled' false)" = "true" ] || {
 		sbm_info "disabled in settings — not starting"
+		sbm_write_status
 		return 0
 	}
 	sbm_generate || return 1
