@@ -5,6 +5,9 @@ R="${SBM_ROUTER:-admin@192.168.2.1}"
 set -e
 ssh -o BatchMode=yes "$R" 'mkdir -p /jffs/addons/sbmerlin/lib /jffs/addons/sbmerlin/www /jffs/addons/sbmerlin/templates'
 for f in $(cd sbmerlin && find . -type f | sed 's|^\./||'); do
+	# Create the target directory per file: the tree grows new subdirectories.
+	d=$(dirname "$f")
+	[ "$d" = "." ] || ssh -o BatchMode=yes "$R" "mkdir -p /jffs/addons/sbmerlin/$d"
 	ssh -o BatchMode=yes "$R" "cat > /jffs/addons/sbmerlin/$f" < "sbmerlin/$f"
 	echo "  -> $f"
 done
