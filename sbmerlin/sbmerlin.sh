@@ -57,6 +57,10 @@ sbm_cmd_apply() {
 	sbm_require_jq
 	sbm_settings_init
 	sbm_import_custom_settings
+	# Rules may reference catalogue rule-sets (geosite:youtube) that are not
+	# registered or downloaded yet; resolve and fetch them before generating.
+	sbm_geo_autoregister >/dev/null
+	sbm_geo_ensure >/dev/null
 	if [ "$(sbm_json_get "$SBM_SETTINGS" '.general.enabled' false)" != "true" ]; then
 		sbm_cmd_stop
 		sbm_export_ui

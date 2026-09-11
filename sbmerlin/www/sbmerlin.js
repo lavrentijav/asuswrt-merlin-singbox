@@ -139,14 +139,7 @@ function sbmRenderServers() {
 function sbmRenderRules() {
 	var tb = $('#rl-table tbody').empty();
 	(S.rules || []).forEach(function (r, i) {
-		var m = r.match || {};
-		var matchText = [
-			(m.rule_set || []).map(function (x) { return 'список:' + x; }).join(', '),
-			(m.domain_suffix || []).join(', '),
-			(m.domain || []).join(', '),
-			(m.domain_keyword || []).map(function (x) { return '*' + x + '*'; }).join(', '),
-			(m.ip_cidr || []).join(', ')
-		].filter(function (x) { return x; }).join(' | ');
+		var matchText = sbmMatchText(r.match);
 		tb.append('<tr>' +
 			'<td><input type="text" size="16" value="' + (r.name || '') + '" ' +
 				'onchange="sbmSet(\'rules\',' + i + ',\'name\',this.value)"/></td>' +
@@ -219,20 +212,54 @@ function sbmMove(idx, dir) {
 	sbmRenderRules();
 }
 
-/* Free-form matcher field -> the structured match object the backend expects. */
+/* Free-form matcher field -> the structured match object the backend expects.
+ * Accepts the shorthands an Xray user already knows: geosite:youtube, geoip:ru,
+ * protocol:bittorrent, udp, port:443, port:50000-65535. */
 function sbmSetMatch(idx, text) {
-	var m = { rule_set: [], domain: [], domain_suffix: [], domain_keyword: [], ip_cidr: [] };
+	var m = { rule_set: [], domain: [], domain_suffix: [], domain_keyword: [],
+		ip_cidr: [], port: [], port_range: [], protocol: [] };
+	var network = '';
 	text.split(/[,|]/).forEach(function (raw) {
 		var t = raw.trim();
 		if (!t) return;
-		if (t.indexOf('список:') === 0) m.rule_set.push(t.slice(7).trim());
-		else if (t.indexOf('rule_set:') === 0) m.rule_set.push(t.slice(9).trim());
-		else if (t.indexOf('/') > 0 && /^[0-9.]+\/[0-9]+$/.test(t)) m.ip_cidr.push(t);
+		if (t.indexOf('список:') === 0) t = t.slice(7).trim();
+		else if (t.indexOf('rule_set:') === 0) t = t.slice(9).trim();
+
+		if (t.indexOf('geosite:') === 0 || t.indexOf('geoip:') === 0) m.rule_set.push(t);
+		else if (t.indexOf('geosite-') === 0 || t.indexOf('geoip-') === 0) m.rule_set.push(t);
+		else if (t.indexOf('protocol:') === 0) m.protocol.push(t.slice(9).trim());
+		else if (t === 'bittorrent' || t === 'quic' || t === 'dtls' || t === 'stun') m.protocol.push(t);
+		else if (t === 'udp' || t === 'tcp') network = t;
+		else if (t.indexOf('port:') === 0) {
+			t.slice(5).split(/\s+/).forEach(function (p) {
+				if (p.indexOf('-') > 0) m.port_range.push(p); else if (p) m.port.push(p);
+			});
+		}
+		else if (/^[0-9.]+\/[0-9]+$/.test(t)) m.ip_cidr.push(t);
+		else if (/^[0-9.]+$/.test(t)) m.ip_cidr.push(t + '/32');
 		else if (t.charAt(0) === '*' && t.charAt(t.length - 1) === '*') m.domain_keyword.push(t.slice(1, -1));
+		else if (t.indexOf('*.') === 0) m.domain_suffix.push(t.slice(2));
 		else m.domain_suffix.push(t.replace(/^\./, ''));
 	});
 	Object.keys(m).forEach(function (k) { if (!m[k].length) delete m[k]; });
+	if (network) m.network = network;
 	S.rules[idx].match = m;
+}
+
+/* The structured match object rendered back into that same free-form text. */
+function sbmMatchText(m) {
+	m = m || {};
+	return []
+		.concat(m.rule_set || [])
+		.concat((m.protocol || []).map(function (x) { return 'protocol:' + x; }))
+		.concat(m.network ? [m.network] : [])
+		.concat((m.port || []).map(function (x) { return 'port:' + x; }))
+		.concat((m.port_range || []).map(function (x) { return 'port:' + x; }))
+		.concat(m.domain_suffix || [])
+		.concat(m.domain || [])
+		.concat((m.domain_keyword || []).map(function (x) { return '*' + x + '*'; }))
+		.concat(m.ip_cidr || [])
+		.join(', ');
 }
 
 function sbmAddRule() {

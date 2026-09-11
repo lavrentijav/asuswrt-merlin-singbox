@@ -6,13 +6,15 @@
 # NOTE: Entware's jq is built without oniguruma, so test/match/gsub/capture are
 # unavailable here. Only literal string functions may be used.
 
-def enabled_nodes: [.nodes[]? | select((.enabled // true) and ((.tag // "") != ""))];
+# NOTE: `.enabled // true` is wrong here — in jq `false // true` is true, so a
+# disabled entry would stay active. Compare against false explicitly.
+def enabled_nodes: [.nodes[]? | select((.enabled != false) and ((.tag // "") != ""))];
 
 # Groups that actually have at least one node — an empty urltest is rejected by sing-box.
 def live_groups($nodes): [.groups[]? | . as $g
 	| select([$nodes[] | select(.group == $g.id)] | length > 0)];
 
-def active_rules: [.rules[]? | select(.enabled // true)];
+def active_rules: [.rules[]? | select(.enabled != false)];
 
 # Outbound tag a rule routes to. "direct"/"block" are handled by the caller.
 def rule_target($r):
@@ -136,7 +138,10 @@ def rule_target($r):
               + (if (($r.match.domain_suffix // []) | length) > 0 then { domain_suffix: $r.match.domain_suffix } else {} end)
               + (if (($r.match.domain_keyword // []) | length) > 0 then { domain_keyword: $r.match.domain_keyword } else {} end)
               + (if (($r.match.ip_cidr // []) | length) > 0 then { ip_cidr: $r.match.ip_cidr } else {} end)
-              + (if (($r.match.port // []) | length) > 0 then { port: $r.match.port } else {} end)
+              + (if (($r.match.port // []) | length) > 0 then { port: ($r.match.port | map(tonumber)) } else {} end)
+              + (if (($r.match.port_range // []) | length) > 0 then { port_range: $r.match.port_range } else {} end)
+              + (if (($r.match.protocol // []) | length) > 0 then { protocol: $r.match.protocol } else {} end)
+              + (if (($r.match.network // "") != "") then { network: [$r.match.network] } else {} end)
               + (if (($r.match.source_ip_cidr // []) | length) > 0 then { source_ip_cidr: $r.match.source_ip_cidr } else {} end)
             ) as $m
           | select(($m | length) > 0)

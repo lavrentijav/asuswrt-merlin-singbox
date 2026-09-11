@@ -42,7 +42,7 @@ sbm_watchdog() {
 
 # Groups that some rule wants to fall back to direct when they die.
 sbm_failover_groups() {
-	"$SBM_JQ" -r '[.rules[]? | select((.enabled // true)
+	"$SBM_JQ" -r '[.rules[]? | select((.enabled != false)
 			and ((.action // "") | startswith("group:"))
 			and ((.on_fail // "block") == "direct"))
 		| (.action | ltrimstr("group:"))] | unique | .[]' "$SBM_SETTINGS" 2>/dev/null

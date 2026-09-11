@@ -4,6 +4,53 @@
 # Only lists referenced by an enabled rule are downloaded, and a list is only
 # recompiled when its source actually changed, so a daily cron run is cheap.
 
+# Where a well-known rule-set id comes from. Lets a rule reference
+# "geosite:youtube" the way an Xray config does, without the user hunting URLs.
+sbm_geo_catalog_url() {
+	case "$1" in
+		geosite-*) printf 'https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/%s.srs' "$1" ;;
+		geoip-*)   printf 'https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/%s.srs' "$1" ;;
+		*)         printf '' ;;
+	esac
+}
+
+# Normalise "geosite:youtube" / "geoip:ru" to the file-safe id used everywhere else.
+sbm_geo_normalize_id() {
+	case "$1" in
+		geosite:*) printf 'geosite-%s' "${1#geosite:}" ;;
+		geoip:*)   printf 'geoip-%s' "${1#geoip:}" ;;
+		*)         printf '%s' "$1" ;;
+	esac
+}
+
+# Any rule-set a rule references but that has no geo entry yet is added from the
+# catalogue, so writing a rule is all the user has to do.
+sbm_geo_autoregister() {
+	_added=0
+	for _raw in $("$SBM_JQ" -r '[.rules[]? | (.match.rule_set // [])[]] | unique | .[]' "$SBM_SETTINGS" 2>/dev/null); do
+		_id=$(sbm_geo_normalize_id "$_raw")
+		_known=$("$SBM_JQ" -r --arg i "$_id" '[.geo[]? | select(.id == $i)] | length' "$SBM_SETTINGS")
+		if [ "$_raw" != "$_id" ]; then
+			# Rewrite the shorthand in the rule itself so config and files agree.
+			"$SBM_JQ" --arg old "$_raw" --arg new "$_id" '
+				.rules = [.rules[]? | .match.rule_set = [(.match.rule_set // [])[]
+					| if . == $old then $new else . end]]
+			' "$SBM_SETTINGS" > "$SBM_SETTINGS.new" && mv -f "$SBM_SETTINGS.new" "$SBM_SETTINGS"
+		fi
+		[ "$_known" = "0" ] || continue
+		_url=$(sbm_geo_catalog_url "$_id")
+		[ -n "$_url" ] || { sbm_warn "rule-set $_id is unknown and has no URL — rule will be ignored"; continue; }
+		"$SBM_JQ" --arg i "$_id" --arg u "$_url" '
+			.geo += [{ id: $i, name: $i, url: $u, format: "srs", target: "srs",
+			           interval_h: 168, enabled: true, auto: true }]
+		' "$SBM_SETTINGS" > "$SBM_SETTINGS.new" && mv -f "$SBM_SETTINGS.new" "$SBM_SETTINGS"
+		sbm_info "registered rule-set $_id from the catalogue"
+		_added=1
+	done
+	[ "$_added" = 1 ] && echo added
+	return 0
+}
+
 # sbm_geo_update [id] — refresh one list or every enabled one.
 # Prints "changed" when at least one rule-set was replaced.
 sbm_geo_update() {
@@ -54,6 +101,20 @@ sbm_geo_update() {
 	done
 
 	[ "$_changed" = 1 ] && echo changed
+	return 0
+}
+
+# Download any enabled list whose file is not on disk yet, ignoring the interval:
+# a rule that references a missing rule-set would otherwise be silently dropped.
+sbm_geo_ensure() {
+	_missing=0
+	for _id in $("$SBM_JQ" -r '[.geo[]? | select(.enabled // false) | .id] | .[]' "$SBM_SETTINGS" 2>/dev/null); do
+		_tgt=$("$SBM_JQ" -r --arg i "$_id" '.geo[] | select(.id == $i) | .target // "srs"' "$SBM_SETTINGS")
+		sbm_geo_present "$_id" "$_tgt" && continue
+		sbm_geo_update "$_id" >/dev/null
+		_missing=1
+	done
+	[ "$_missing" = 1 ] && echo changed
 	return 0
 }
 

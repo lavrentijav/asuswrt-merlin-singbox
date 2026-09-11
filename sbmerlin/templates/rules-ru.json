@@ -1,0 +1,104 @@
+[
+  {
+    "id": "ads", "name": "Мусор — реклама и трекеры", "enabled": true,
+    "match": { "rule_set": ["geosite:category-ads-all"] },
+    "action": "block", "on_fail": "block"
+  },
+  {
+    "id": "p2p", "name": "P2P / торренты — напрямую", "enabled": true,
+    "match": { "protocol": ["bittorrent"] },
+    "action": "direct", "on_fail": "direct"
+  },
+  {
+    "id": "ru", "name": "РФ — напрямую", "enabled": true,
+    "match": {
+      "rule_set": ["geosite:category-gov-ru", "geosite:category-ru", "geosite:yandex",
+                   "geosite:mailru", "geosite:vk", "geosite:ozon"],
+      "domain_suffix": ["a7.ru"]
+    },
+    "action": "direct", "on_fail": "direct"
+  },
+  {
+    "id": "anixart", "name": "Anixart", "enabled": true,
+    "match": {
+      "domain_suffix": ["anixsekai.com", "anixart.tv", "anixstatic.com",
+                        "anixartapp.com", "anixart.app"]
+    },
+    "action": "group:FI", "on_fail": "block"
+  },
+  {
+    "id": "blocked", "name": "Заблокированное в РФ (РКН)", "enabled": true,
+    "match": { "rule_set": ["rkn-domains"] },
+    "action": "group:FI", "on_fail": "block"
+  },
+  {
+    "id": "video", "name": "Видео", "enabled": true,
+    "match": { "rule_set": ["geosite:youtube", "geosite:netflix", "geosite:twitch",
+                            "geosite:tiktok", "geosite:vimeo"] },
+    "action": "group:FI", "on_fail": "block"
+  },
+  {
+    "id": "music", "name": "Музыка", "enabled": true,
+    "match": { "rule_set": ["geosite:spotify", "geosite:soundcloud"] },
+    "action": "group:FI", "on_fail": "block"
+  },
+  {
+    "id": "social", "name": "Соцсети и мессенджеры", "enabled": true,
+    "match": { "rule_set": ["geosite:discord", "geosite:twitter", "geosite:facebook",
+                            "geosite:instagram", "geosite:signal", "geosite:whatsapp",
+                            "geosite:telegram", "geosite:reddit", "geosite:linkedin"] },
+    "action": "group:FI", "on_fail": "block"
+  },
+  {
+    "id": "ai", "name": "AI-сервисы", "enabled": true,
+    "match": {
+      "rule_set": ["geosite:openai", "geosite:anthropic", "geosite:google-gemini",
+                   "geosite:perplexity", "geosite:deepseek", "geosite:xai"],
+      "domain": ["gemini.google.com", "accounts.google.com", "ogads-pa.clients6.google.com",
+                 "waa-pa.clients6.google.com", "signaler-pa.clients6.google.com", "ogs.google.com"],
+      "domain_suffix": ["gstatic.com"]
+    },
+    "action": "group:FI", "on_fail": "block"
+  },
+  {
+    "id": "games", "name": "Игры", "enabled": true,
+    "match": {
+      "rule_set": ["geosite:steam", "geosite:epicgames", "geosite:playstation",
+                   "geosite:xbox", "geosite:category-games"],
+      "domain_suffix": ["bleak.su"],
+      "ip_cidr": ["188.245.187.0/24"]
+    },
+    "action": "group:FI", "on_fail": "direct"
+  },
+  {
+    "id": "dev", "name": "IT и разработка", "enabled": true,
+    "match": { "rule_set": ["geosite:github", "geosite:gitlab", "geosite:docker",
+                            "geosite:npmjs", "geosite:python", "geosite:jetbrains",
+                            "geosite:notion", "geosite:figma", "geosite:nvidia"] },
+    "action": "group:FI", "on_fail": "direct"
+  },
+  {
+    "id": "vendors", "name": "Apple / Microsoft / Adobe", "enabled": true,
+    "match": { "rule_set": ["geosite:apple", "geosite:microsoft", "geosite:adobe"] },
+    "action": "group:FI", "on_fail": "direct"
+  },
+  {
+    "id": "news", "name": "Новости и знания", "enabled": true,
+    "match": { "rule_set": ["geosite:bbc", "geosite:cnn", "geosite:medium",
+                            "geosite:wikimedia", "geosite:rutracker"] },
+    "action": "group:FI", "on_fail": "block"
+  },
+  {
+    "id": "infra", "name": "Инфраструктура и публичный DNS", "enabled": true,
+    "match": {
+      "rule_set": ["geosite:cloudflare", "geosite:duckduckgo"],
+      "ip_cidr": ["1.1.1.1/32", "1.0.0.1/32", "8.8.8.8/32", "8.8.4.4/32"]
+    },
+    "action": "group:FI", "on_fail": "direct"
+  },
+  {
+    "id": "udp443", "name": "QUIC/UDP 443 и 50000-65535 (нагружает CPU)", "enabled": false,
+    "match": { "network": "udp", "port": ["443"], "port_range": ["50000:65535"] },
+    "action": "group:FI", "on_fail": "direct"
+  }
+]
