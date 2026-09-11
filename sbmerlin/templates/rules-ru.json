@@ -1,104 +1,393 @@
 [
   {
-    "id": "ads", "name": "Мусор — реклама и трекеры", "enabled": true,
-    "match": { "rule_set": ["geosite:category-ads-all"] },
-    "action": "block", "on_fail": "block"
-  },
-  {
-    "id": "p2p", "name": "P2P / торренты — напрямую", "enabled": true,
-    "match": { "protocol": ["bittorrent"] },
-    "action": "direct", "on_fail": "direct"
-  },
-  {
-    "id": "ru", "name": "РФ — напрямую", "enabled": true,
+    "id": "ads",
+    "name": "Мусор — реклама и трекеры",
+    "enabled": true,
     "match": {
-      "rule_set": ["geosite:category-gov-ru", "geosite:category-ru", "geosite:yandex",
-                   "geosite:mailru", "geosite:vk", "geosite:ozon"],
-      "domain_suffix": ["a7.ru"]
+      "rule_set": [
+        "geosite:category-ads-all"
+      ]
     },
-    "action": "direct", "on_fail": "direct"
+    "action": "block",
+    "on_fail": "block"
   },
   {
-    "id": "anixart", "name": "Anixart", "enabled": true,
+    "id": "p2p",
+    "name": "P2P / торренты — напрямую",
+    "enabled": true,
     "match": {
-      "domain_suffix": ["anixsekai.com", "anixart.tv", "anixstatic.com",
-                        "anixartapp.com", "anixart.app"]
+      "protocol": [
+        "bittorrent"
+      ]
     },
-    "action": "group:FI", "on_fail": "block"
+    "action": "direct",
+    "on_fail": "direct"
   },
   {
-    "id": "blocked", "name": "Заблокированное в РФ (РКН)", "enabled": true,
-    "match": { "rule_set": ["rkn-domains"] },
-    "action": "group:FI", "on_fail": "block"
-  },
-  {
-    "id": "video", "name": "Видео", "enabled": true,
-    "match": { "rule_set": ["geosite:youtube", "geosite:netflix", "geosite:twitch",
-                            "geosite:tiktok", "geosite:vimeo"] },
-    "action": "group:FI", "on_fail": "block"
-  },
-  {
-    "id": "music", "name": "Музыка", "enabled": true,
-    "match": { "rule_set": ["geosite:spotify", "geosite:soundcloud"] },
-    "action": "group:FI", "on_fail": "block"
-  },
-  {
-    "id": "social", "name": "Соцсети и мессенджеры", "enabled": true,
-    "match": { "rule_set": ["geosite:discord", "geosite:twitter", "geosite:facebook",
-                            "geosite:instagram", "geosite:signal", "geosite:whatsapp",
-                            "geosite:telegram", "geosite:reddit", "geosite:linkedin"] },
-    "action": "group:FI", "on_fail": "block"
-  },
-  {
-    "id": "ai", "name": "AI-сервисы", "enabled": true,
+    "id": "ru",
+    "name": "РФ — напрямую",
+    "enabled": true,
     "match": {
-      "rule_set": ["geosite:openai", "geosite:anthropic", "geosite:google-gemini",
-                   "geosite:perplexity", "geosite:deepseek", "geosite:xai"],
-      "domain": ["gemini.google.com", "accounts.google.com", "ogads-pa.clients6.google.com",
-                 "waa-pa.clients6.google.com", "signaler-pa.clients6.google.com", "ogs.google.com"],
-      "domain_suffix": ["gstatic.com"]
+      "rule_set": [
+        "geosite:category-gov-ru",
+        "geosite:category-ru",
+        "geosite:yandex",
+        "geosite:mailru",
+        "geosite:vk",
+        "geosite:ozon"
+      ],
+      "domain_suffix": [
+        "a7.ru"
+      ]
     },
-    "action": "group:FI", "on_fail": "block"
+    "action": "direct",
+    "on_fail": "direct"
   },
   {
-    "id": "games", "name": "Игры", "enabled": true,
+    "id": "anixart",
+    "name": "Anixart",
+    "enabled": true,
     "match": {
-      "rule_set": ["geosite:steam", "geosite:epicgames", "geosite:playstation",
-                   "geosite:xbox", "geosite:category-games"],
-      "domain_suffix": ["bleak.su"],
-      "ip_cidr": ["188.245.187.0/24"]
+      "domain_suffix": [
+        "anixsekai.com",
+        "anixart.tv",
+        "anixstatic.com",
+        "anixartapp.com",
+        "anixart.app"
+      ]
     },
-    "action": "group:FI", "on_fail": "direct"
+    "action": "group:FI",
+    "on_fail": "block"
   },
   {
-    "id": "dev", "name": "IT и разработка", "enabled": true,
-    "match": { "rule_set": ["geosite:github", "geosite:gitlab", "geosite:docker",
-                            "geosite:npmjs", "geosite:python", "geosite:jetbrains",
-                            "geosite:notion", "geosite:figma", "geosite:nvidia"] },
-    "action": "group:FI", "on_fail": "direct"
-  },
-  {
-    "id": "vendors", "name": "Apple / Microsoft / Adobe", "enabled": true,
-    "match": { "rule_set": ["geosite:apple", "geosite:microsoft", "geosite:adobe"] },
-    "action": "group:FI", "on_fail": "direct"
-  },
-  {
-    "id": "news", "name": "Новости и знания", "enabled": true,
-    "match": { "rule_set": ["geosite:bbc", "geosite:cnn", "geosite:medium",
-                            "geosite:wikimedia", "geosite:rutracker"] },
-    "action": "group:FI", "on_fail": "block"
-  },
-  {
-    "id": "infra", "name": "Инфраструктура и публичный DNS", "enabled": true,
+    "id": "blocked",
+    "name": "Заблокированное в РФ (РКН)",
+    "enabled": true,
     "match": {
-      "rule_set": ["geosite:cloudflare", "geosite:duckduckgo"],
-      "ip_cidr": ["1.1.1.1/32", "1.0.0.1/32", "8.8.8.8/32", "8.8.4.4/32"]
+      "rule_set": [
+        "rkn-domains"
+      ]
     },
-    "action": "group:FI", "on_fail": "direct"
+    "action": "group:FI",
+    "on_fail": "block"
   },
   {
-    "id": "udp443", "name": "QUIC/UDP 443 и 50000-65535 (нагружает CPU)", "enabled": false,
-    "match": { "network": "udp", "port": ["443"], "port_range": ["50000:65535"] },
-    "action": "group:FI", "on_fail": "direct"
+    "id": "video",
+    "name": "Видео",
+    "enabled": true,
+    "match": {
+      "rule_set": [
+        "geosite:youtube",
+        "geosite:netflix",
+        "geosite:twitch",
+        "geosite:tiktok",
+        "geosite:vimeo"
+      ]
+    },
+    "action": "group:FI",
+    "on_fail": "block"
+  },
+  {
+    "id": "music",
+    "name": "Музыка",
+    "enabled": true,
+    "match": {
+      "rule_set": [
+        "geosite:spotify",
+        "geosite:soundcloud"
+      ]
+    },
+    "action": "group:FI",
+    "on_fail": "block"
+  },
+  {
+    "id": "social",
+    "name": "Соцсети и мессенджеры",
+    "enabled": true,
+    "match": {
+      "rule_set": [
+        "geosite:discord",
+        "geosite:twitter",
+        "geosite:facebook",
+        "geosite:instagram",
+        "geosite:signal",
+        "geosite:whatsapp",
+        "geosite:telegram",
+        "geosite:reddit",
+        "geosite:linkedin"
+      ]
+    },
+    "action": "group:FI",
+    "on_fail": "block"
+  },
+  {
+    "id": "ai",
+    "name": "AI — чаты, API, приложения и code-версии",
+    "enabled": true,
+    "match": {
+      "rule_set": [
+        "geosite:openai",
+        "geosite:anthropic",
+        "geosite:google-gemini",
+        "geosite:xai",
+        "geosite:perplexity",
+        "geosite:deepseek",
+        "geosite:github-copilot",
+        "geosite:cursor",
+        "geosite:huggingface",
+        "geosite:groq",
+        "geosite:elevenlabs",
+        "geosite:poe",
+        "geosite:category-ai-chat-!cn",
+        "geosite:category-ai-!cn"
+      ],
+      "domain_suffix": [
+        "01.ai",
+        "ai.google.dev",
+        "ai21.com",
+        "aider.chat",
+        "aistudio.google.com",
+        "anthropic.com",
+        "anyscale.com",
+        "assemblyai.com",
+        "augmentcode.com",
+        "baichuan-ai.com",
+        "base44.com",
+        "bigmodel.cn",
+        "bolt.new",
+        "cerebras.ai",
+        "character.ai",
+        "chatglm.cn",
+        "chatgpt.com",
+        "civitai.com",
+        "claude.ai",
+        "claude.com",
+        "claudeusercontent.com",
+        "cline.bot",
+        "codeium.com",
+        "cognition-labs.com",
+        "cognition.ai",
+        "cohere.ai",
+        "cohere.com",
+        "comfy.org",
+        "continue.dev",
+        "copilot.microsoft.com",
+        "cursor-cdn.com",
+        "cursor.com",
+        "cursor.sh",
+        "deepgram.com",
+        "deepinfra.com",
+        "deepmind.google",
+        "descript.com",
+        "devin.ai",
+        "factory.ai",
+        "felo.ai",
+        "fireworks.ai",
+        "genspark.ai",
+        "githubcopilot.com",
+        "grok.com",
+        "heygen.com",
+        "hf.co",
+        "hyperbolic.xyz",
+        "ideogram.ai",
+        "idx.google.com",
+        "inflection.ai",
+        "jan.ai",
+        "jules.google",
+        "kagi.com",
+        "kimi.com",
+        "krea.ai",
+        "labs.google",
+        "lambdalabs.com",
+        "langchain.com",
+        "leonardo.ai",
+        "llamaindex.ai",
+        "lmstudio.ai",
+        "lovable.app",
+        "lovable.dev",
+        "lumalabs.ai",
+        "midjourney.com",
+        "minimax.io",
+        "minimaxi.com",
+        "mistral.ai",
+        "modal.com",
+        "moonshot.ai",
+        "moonshot.cn",
+        "notebooklm.google",
+        "notebooklm.google.com",
+        "novita.ai",
+        "oaistatic.com",
+        "oaiusercontent.com",
+        "ollama.ai",
+        "ollama.com",
+        "openai.com",
+        "openai.fm",
+        "openrouter.ai",
+        "openwebui.com",
+        "phind.com",
+        "pika.art",
+        "pinecone.io",
+        "play.ht",
+        "pplx.ai",
+        "qwen.ai",
+        "repl.co",
+        "replicate.com",
+        "replit.com",
+        "resemble.ai",
+        "runpod.io",
+        "runwayml.com",
+        "sambanova.ai",
+        "sentry.io",
+        "siliconflow.cn",
+        "sora.com",
+        "sourcegraph.com",
+        "stability.ai",
+        "stackblitz.com",
+        "statsig.com",
+        "stepfun.com",
+        "suno.ai",
+        "suno.com",
+        "synthesia.io",
+        "tabnine.com",
+        "together.ai",
+        "together.xyz",
+        "topazlabs.com",
+        "udio.com",
+        "v0.app",
+        "v0.dev",
+        "vscode-cdn.net",
+        "wandb.ai",
+        "weaviate.io",
+        "windsurf.com",
+        "writer.com",
+        "x.ai",
+        "you.com",
+        "z.ai",
+        "zed.dev"
+      ],
+      "domain": [
+        "accounts.google.com",
+        "alkalimakersuite-pa.clients6.google.com",
+        "copilot-proxy.githubusercontent.com",
+        "copilot-telemetry.githubusercontent.com",
+        "gemini.google.com",
+        "generativelanguage.googleapis.com",
+        "lh3.googleusercontent.com",
+        "makersuite.google.com",
+        "ogads-pa.clients6.google.com",
+        "ogs.google.com",
+        "signaler-pa.clients6.google.com",
+        "waa-pa.clients6.google.com"
+      ]
+    },
+    "action": "group:FI",
+    "on_fail": "block"
+  },
+  {
+    "id": "games",
+    "name": "Игры",
+    "enabled": true,
+    "match": {
+      "rule_set": [
+        "geosite:steam",
+        "geosite:epicgames",
+        "geosite:playstation",
+        "geosite:xbox",
+        "geosite:category-games"
+      ],
+      "domain_suffix": [
+        "bleak.su"
+      ],
+      "ip_cidr": [
+        "188.245.187.0/24"
+      ]
+    },
+    "action": "group:FI",
+    "on_fail": "direct"
+  },
+  {
+    "id": "dev",
+    "name": "IT и разработка",
+    "enabled": true,
+    "match": {
+      "rule_set": [
+        "geosite:github",
+        "geosite:gitlab",
+        "geosite:docker",
+        "geosite:npmjs",
+        "geosite:python",
+        "geosite:jetbrains",
+        "geosite:notion",
+        "geosite:figma",
+        "geosite:nvidia"
+      ]
+    },
+    "action": "group:FI",
+    "on_fail": "direct"
+  },
+  {
+    "id": "vendors",
+    "name": "Apple / Microsoft / Adobe",
+    "enabled": true,
+    "match": {
+      "rule_set": [
+        "geosite:apple",
+        "geosite:microsoft",
+        "geosite:adobe"
+      ]
+    },
+    "action": "group:FI",
+    "on_fail": "direct"
+  },
+  {
+    "id": "news",
+    "name": "Новости и знания",
+    "enabled": true,
+    "match": {
+      "rule_set": [
+        "geosite:bbc",
+        "geosite:cnn",
+        "geosite:medium",
+        "geosite:wikimedia",
+        "geosite:rutracker"
+      ]
+    },
+    "action": "group:FI",
+    "on_fail": "block"
+  },
+  {
+    "id": "infra",
+    "name": "Инфраструктура и публичный DNS",
+    "enabled": true,
+    "match": {
+      "rule_set": [
+        "geosite:cloudflare",
+        "geosite:duckduckgo"
+      ],
+      "ip_cidr": [
+        "1.1.1.1/32",
+        "1.0.0.1/32",
+        "8.8.8.8/32",
+        "8.8.4.4/32"
+      ]
+    },
+    "action": "group:FI",
+    "on_fail": "direct"
+  },
+  {
+    "id": "udp443",
+    "name": "QUIC/UDP 443 и 50000-65535 (нагружает CPU)",
+    "enabled": false,
+    "match": {
+      "network": "udp",
+      "port": [
+        "443"
+      ],
+      "port_range": [
+        "50000:65535"
+      ]
+    },
+    "action": "group:FI",
+    "on_fail": "direct"
   }
 ]

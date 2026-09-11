@@ -36,6 +36,12 @@ def rule_target($r):
 | [$rules[] | select(((.action // "") | startswith("group:")) and ((.on_fail // "block") == "direct"))
    | (.action | ltrimstr("group:"))] as $failover_raw
 | ($failover_raw | map(select(. as $x | $gids | index($x))) | unique) as $failover_groups
+# Default group for the encrypted upstream resolver: the one most rules already
+# trust. Picking an arbitrary group (say, the alphabetically first) would send
+# every DoH query through a direction that may have no working node at all.
+| ([$rules[] | select((.action // "") | startswith("group:")) | (.action | ltrimstr("group:"))]
+   | map(select(. as $x | $gids | index($x)))
+   | group_by(.) | sort_by(-length) | (.[0] // [])[0] // ($gids[0] // "")) as $dns_group
 # Rule-sets referenced by any rule or DNS rule, so we only load what is used.
 | ([$rules[] | (.match.rule_set // [])[]]
    + [$s.geo[]? | select((.direct // false) and (.enabled // false)) | .id] | unique) as $used_sets
@@ -62,7 +68,7 @@ def rule_target($r):
                         and (($s.general.dns.remote_outbound // "") | startswith("group:"))
                         and (($s.general.dns.remote_outbound | ltrimstr("group:")) as $g | $gids | index($g))
                      then "grp-" + ($s.general.dns.remote_outbound | ltrimstr("group:"))
-                     elif ($gids | length) > 0 then "grp-" + $gids[0]
+                     elif ($dns_group != "") then "grp-" + $dns_group
                      else "direct" end) } ]
     ),
     rules: (
