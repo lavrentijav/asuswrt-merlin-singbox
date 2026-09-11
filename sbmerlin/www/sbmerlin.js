@@ -155,33 +155,47 @@ function sbmRenderRules() {
 	var tb = $('#rl-table tbody').empty();
 	(S.rules || []).forEach(function (r, i) {
 		var m = r.match || {};
-		var counts = [];
+		var chips = [];
+		var ns = (m.rule_set || []).length;
 		var nd = (m.domain || []).length + (m.domain_suffix || []).length + (m.domain_keyword || []).length;
 		var ni = (m.ip_cidr || []).length;
-		var ns = (m.rule_set || []).length;
-		if (ns) counts.push(ns + ' списк.');
-		if (nd) counts.push(nd + ' домен.');
-		if (ni) counts.push(ni + ' IP');
-		var ports = (m.port || []).concat(m.port_range || []).join(', ');
+		if (ns) chips.push('<span class="sbm-chip set">' + ns + ' ' + sbmPlural(ns, 'список', 'списка', 'списков') + '</span>');
+		if (nd) chips.push('<span class="sbm-chip dom">' + nd + ' ' + sbmPlural(nd, 'домен', 'домена', 'доменов') + '</span>');
+		if (ni) chips.push('<span class="sbm-chip ip">' + ni + ' IP</span>');
+		if (m.network) chips.push('<span class="sbm-chip">' + m.network + '</span>');
+		(m.protocol || []).forEach(function (p) { chips.push('<span class="sbm-chip">' + p + '</span>'); });
+		var ports = (m.port || []).concat((m.port_range || []).map(function (x) { return x.replace(':', '-'); }));
+		if (ports.length) chips.push('<span class="sbm-chip">порт ' + ports.join(', ') + '</span>');
+		(m.inbound || []).forEach(function (k) {
+			chips.push('<span class="sbm-chip">из: ' + sbmInboundLabel([k]) + '</span>');
+		});
+		if (!chips.length) chips.push('<span class="sbm-chip">пусто — правило ничего не ловит</span>');
 
-		tb.append('<tr>' +
-			'<td><span class="sbm-link" onclick="sbmEditOpen(' + i + ')">' +
-				(r.name || 'без имени') + '</span></td>' +
-			'<td>' + sbmActionLabel(r.action) + '</td>' +
-			'<td class="sbm-muted">' + (r.on_fail === 'direct' ? 'напрямую' : 'блок') + '</td>' +
-			'<td class="sbm-muted">' + (m.network || 'любая') + '</td>' +
-			'<td class="sbm-muted">' + ((m.protocol || []).join(', ') || '—') + '</td>' +
-			'<td class="sbm-muted">' + (ports || '—') + '</td>' +
-			'<td class="sbm-muted">' + sbmInboundLabel(m.inbound) + '</td>' +
-			'<td class="sbm-muted">' + (counts.join(', ') || '—') + '</td>' +
+		chips.push('<span class="sbm-chip">при отказе: ' +
+			(r.on_fail === 'direct' ? 'напрямую' : 'блок') + '</span>');
+		var dim = r.enabled === false ? ' style="opacity:.45"' : '';
+		tb.append('<tr' + dim + '>' +
+			'<td><div class="sbm-order">' +
+				'<span onclick="sbmMove(' + i + ',-1)" title="выше">▲</span>' +
+				'<span onclick="sbmMove(' + i + ',1)" title="ниже">▼</span></div></td>' +
+			'<td><div class="sbm-rule-name">' + (r.name || 'без имени') + '</div>' +
+				'<div class="sbm-chips">' + chips.join('') + '</div></td>' +
+			'<td class="sbm-out">' + sbmActionLabel(r.action) + '</td>' +
 			'<td><input type="checkbox"' + (r.enabled !== false ? ' checked' : '') +
-				' onchange="sbmSet(\'rules\',' + i + ',\'enabled\',this.checked)"/></td>' +
-			'<td><span class="sbm-del" onclick="sbmMove(' + i + ',-1)">↑</span> ' +
-				'<span class="sbm-del" onclick="sbmMove(' + i + ',1)">↓</span> ' +
-				'<span class="sbm-del" onclick="sbmDel(\'rules\',' + i + ')">✕</span></td></tr>');
+				' onchange="sbmSet(\'rules\',' + i + ',\'enabled\',this.checked); sbmRenderRules();"/></td>' +
+			'<td class="sbm-acts"><button type="button" class="sbm-btn" onclick="sbmEditOpen(' + i + ')">⚙ Правка</button> ' +
+				'<button type="button" class="sbm-btn danger" onclick="sbmDel(\'rules\',' + i + ')">✕</button></td>' +
+			'</tr>');
 	});
 	$('#rl-final').html(groupOptions((S.general && S.general.final) || 'direct', [['direct', 'Напрямую']]))
 		.off('change').on('change', function () { S.general.final = this.value; });
+}
+
+function sbmPlural(n, one, few, many) {
+	var a = n % 10, b = n % 100;
+	if (a === 1 && b !== 11) return one;
+	if (a >= 2 && a <= 4 && (b < 10 || b >= 20)) return few;
+	return many;
 }
 
 function sbmActionLabel(a) {

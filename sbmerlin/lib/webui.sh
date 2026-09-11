@@ -14,10 +14,18 @@ sbm_mount_ui() {
 	[ -f "$_page" ] || { sbm_error "UI page missing: $_page"; return 1; }
 
 	. /usr/sbin/helper.sh 2>/dev/null
-	am_get_webui_page "$_page"
+	# Reuse the slot we already own. am_get_webui_page matches by file hash, so
+	# after editing the page it would hand out a *new* slot and leave the old
+	# copy behind — the browser would then keep showing the stale page.
+	am_webui_page=$(am_settings_get sbm_page)
+	if [ -z "$am_webui_page" ] || [ "$am_webui_page" = "none" ]; then
+		am_get_webui_page "$_page"
+	fi
 	[ "$am_webui_page" = "none" ] && { sbm_error "no free WebUI slot (max 20 addon pages)"; return 1; }
 
-	cp -f "$_page" "/www/user/$am_webui_page"
+	# Cache-bust the script: /www is served without revalidation.
+	_stamp="$SBM_VERSION-$(date +%s)"
+	sed "s|/ext/sbmerlin/sbmerlin.js|/ext/sbmerlin/sbmerlin.js?v=$_stamp|" "$_page" 		> "/www/user/$am_webui_page"
 	echo "$SBM_UI_TITLE" > "/www/user/${am_webui_page%.asp}.title"
 	am_settings_set sbm_page "$am_webui_page"
 
@@ -25,8 +33,24 @@ sbm_mount_ui() {
 	# Assets the page pulls at runtime live next to the generated status file.
 	cp -f "$SBM_WWW_DIR/sbmerlin.js" "$SBM_EXT_DIR/sbmerlin.js" 2>/dev/null
 
+	sbm_drop_stale_slots "$am_webui_page"
 	sbm_menu_add "$am_webui_page"
 	sbm_info "UI mounted at /$am_webui_page"
+	return 0
+}
+
+# Older versions of this addon (or a hash-based slot hand-out) can leave a second
+# copy of the page behind, which shows up as a duplicate, stale Addons entry.
+sbm_drop_stale_slots() {
+	_keep="$1"
+	for _t in /www/user/user*.title; do
+		[ -f "$_t" ] || continue
+		[ "$(cat "$_t" 2>/dev/null)" = "$SBM_UI_TITLE" ] || continue
+		_slot="$(basename "$_t" .title).asp"
+		[ "$_slot" = "$_keep" ] && continue
+		rm -f "/www/user/$_slot" "$_t"
+		sbm_info "removed stale UI copy /$_slot"
+	done
 	return 0
 }
 

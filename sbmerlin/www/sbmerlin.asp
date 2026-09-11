@@ -40,6 +40,21 @@
 #sbm .sbm-del { color:#ff9b9b; cursor:pointer; font-weight:bold; }
 #sbm .sbm-note { background:#3f4f54; border-left:3px solid #6aa5b8; padding:8px 10px; margin:8px 0; font-size:12px; }
 #sbm .sbm-link { color:#8fd0e8; cursor:pointer; text-decoration:underline dotted; }
+#sbm .sbm-rule-name { font-weight:bold; color:#fff; font-size:13px; }
+#sbm .sbm-chips { margin-top:3px; display:flex; gap:5px; flex-wrap:wrap; }
+#sbm .sbm-chip { background:#3f4f54; color:#bcd3da; border-radius:3px; padding:1px 7px; font-size:11px; white-space:nowrap; }
+#sbm .sbm-chip.set { background:#2b4d5c; color:#cfe9f5; }
+#sbm .sbm-chip.dom { background:#2f4d3a; color:#d2f0dd; }
+#sbm .sbm-chip.ip  { background:#4d432b; color:#f2e5c8; }
+#sbm .sbm-order { display:flex; flex-direction:column; line-height:1; }
+#sbm .sbm-order span { cursor:pointer; color:#9fb7bf; padding:1px 0; }
+#sbm .sbm-order span:hover { color:#fff; }
+#sbm .sbm-btn { background:#3f4f54; color:#fff; border:1px solid #223; border-radius:4px;
+	padding:3px 8px; cursor:pointer; font-size:12px; white-space:nowrap; }
+#sbm .sbm-btn:hover { background:#56696f; }
+#sbm .sbm-btn.danger { background:#5c2b2b; padding:3px 7px; }
+#sbm td.sbm-acts { white-space:nowrap; }
+#sbm td.sbm-out { font-weight:bold; }
 #sbm .sbm-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:999; }
 #sbm .sbm-modal.open { display:block; }
 #sbm .sbm-modal-box { position:absolute; top:4%; left:50%; transform:translateX(-50%);
@@ -95,7 +110,7 @@ var custom_settings = <% get_custom_settings(); %>;
 		<table width="98%" border="0" align="left" cellpadding="0" cellspacing="0">
 		<tr>
 			<td valign="top">
-				<table width="760px" border="0" cellpadding="4" cellspacing="0" class="FormTitle" id="FormTitle">
+				<table width="100%" border="0" cellpadding="4" cellspacing="0" class="FormTitle" id="FormTitle">
 				<tbody><tr><td bgcolor="#4D595D" colspan="3" valign="top">
 				<div id="sbm">
 					<div style="margin:5px 0 10px 5px;">
@@ -159,17 +174,13 @@ var custom_settings = <% get_custom_settings(); %>;
 					<!-- RULES -->
 					<div class="sbm-panel" id="panel-rules">
 						<div class="sbm-note">Правила применяются сверху вниз — первое совпадение выигрывает.
-							Нажмите на название правила, чтобы открыть детальные настройки.</div>
+							Кнопка <b>Настроить</b> открывает все параметры правила; стрелками слева меняется порядок.</div>
 						<table class="sbm-grid" id="rl-table"><thead><tr>
-							<th style="width:170px">Псевдоним</th>
-							<th style="width:110px">Куда</th>
-							<th style="width:105px">Если мертва</th>
-							<th style="width:60px">Сеть</th>
-							<th style="width:110px">Протокол</th>
-							<th style="width:95px">Порты</th>
-							<th style="width:95px">Откуда</th>
-							<th style="width:150px">Содержимое</th>
-							<th style="width:45px">Вкл</th><th style="width:70px"></th>
+							<th style="width:26px"></th>
+							<th>Правило</th>
+							<th style="width:104px">Куда</th>
+							<th style="width:40px">Вкл</th>
+							<th style="width:104px"></th>
 						</tr></thead><tbody></tbody></table>
 						<div class="sbm-actions">
 							<input class="button_gen" type="button" value="Добавить правило" onclick="sbmAddRule()"/>
