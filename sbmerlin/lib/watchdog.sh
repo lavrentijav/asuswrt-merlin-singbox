@@ -1,0 +1,107 @@
+#!/bin/sh
+# sbmerlin — liveness, memory cap and group failover.
+#
+# sing-box's urltest already picks a healthy node inside a group. What it cannot
+# express is "the whole group is down": for rules configured with on_fail=direct
+# we flip their selector to `direct` here, and flip it back on recovery. Rules
+# configured with on_fail=block need nothing — a dead group fails the dial, which
+# is exactly the kill-switch behaviour.
+
+sbm_watchdog() {
+	_enabled=$(sbm_json_get "$SBM_SETTINGS" '.general.enabled' false)
+	[ "$_enabled" = "true" ] || return 0
+
+	if ! sbm_running; then
+		sbm_warn "core not running — restarting"
+		sbm_core_start || return 1
+	fi
+
+	_limit=$(sbm_json_get "$SBM_SETTINGS" '.general.watchdog.rss_limit_mb' 96)
+	_rss=$(sbm_rss_mb)
+	if [ "$_rss" -gt "$_limit" ] 2>/dev/null; then
+		sbm_warn "RSS ${_rss}MiB over ${_limit}MiB limit — restarting core"
+		sbm_core_stop
+		sbm_core_start
+	fi
+
+	sbm_failover_check
+	sbm_write_status
+}
+
+# Groups that some rule wants to fall back to direct when they die.
+sbm_failover_groups() {
+	"$SBM_JQ" -r '[.rules[]? | select((.enabled // true)
+			and ((.action // "") | startswith("group:"))
+			and ((.on_fail // "block") == "direct"))
+		| (.action | ltrimstr("group:"))] | unique | .[]' "$SBM_SETTINGS" 2>/dev/null
+}
+
+sbm_failover_check() {
+	for _g in $(sbm_failover_groups); do
+		_sel="sel-$_g-direct"
+		sbm_api_get "/proxies/$_sel" >/dev/null 2>&1 || continue
+
+		_alive=$(sbm_group_alive_count "$_g")
+		_cur=$(sbm_api_get "/proxies/$_sel" | "$SBM_JQ" -r '.now // ""')
+		if [ "$_alive" = "0" ]; then
+			if [ "$_cur" != "direct" ]; then
+				sbm_api_put "/proxies/$_sel" '{"name":"direct"}' >/dev/null
+				sbm_warn "group $_g is down — rules with on_fail=direct now go direct"
+			fi
+		else
+			if [ "$_cur" != "grp-$_g" ]; then
+				sbm_api_put "/proxies/$_sel" "{\"name\":\"grp-$_g\"}" >/dev/null
+				sbm_info "group $_g recovered ($_alive nodes) — routing restored"
+			fi
+		fi
+	done
+}
+
+# Number of nodes in a group that answer a fresh latency probe. Asking the core
+# to re-test is what makes this authoritative: cached history can be minutes old.
+sbm_group_alive_count() {
+	_g="$1"
+	_url=$(sbm_json_get "$SBM_SETTINGS" ".groups[] | select(.id == \"$_g\") | .url" \
+		"http://cp.cloudflare.com/generate_204")
+	_res=$(sbm_api_get "/group/grp-$_g/delay?url=$_url&timeout=5000")
+	if [ -z "$_res" ]; then echo 0; return 0; fi
+	printf '%s' "$_res" | "$SBM_JQ" -r '
+		if type == "object" and (has("message") | not)
+		then [ to_entries[] | select(.value > 0) ] | length
+		else 0 end' 2>/dev/null | head -1
+}
+
+sbm_write_status() {
+	mkdir -p "$SBM_EXT_DIR" 2>/dev/null
+	_running=false
+	sbm_running && _running=true
+	_pid=$(sbm_pid 2>/dev/null)
+	_mode=$(sbm_effective_mode "$(sbm_json_get "$SBM_SETTINGS" '.general.mode' tproxy)")
+	_proxies=$(sbm_api_get /proxies)
+	[ -n "$_proxies" ] || _proxies='{}'
+	printf '%s' "$_proxies" > "$SBM_RUN_DIR/sbm_proxies.$$"
+
+	"$SBM_JQ" -n \
+		--arg running "$_running" --arg pid "${_pid:-}" --arg mode "$_mode" \
+		--arg rss "$(sbm_rss_mb 2>/dev/null || echo 0)" \
+		--arg ver "$SBM_VERSION" \
+		--arg core "$("$SBM_BIN" version 2>/dev/null | head -1)" \
+		--arg ts "$(date '+%Y-%m-%d %H:%M:%S')" \
+		--slurpfile px "$SBM_RUN_DIR/sbm_proxies.$$" \
+		--slurpfile st "$SBM_SETTINGS" '
+		($px[0].proxies // {}) as $P |
+		{
+			running: ($running == "true"),
+			pid: $pid, mode: $mode, rss_mb: ($rss | tonumber), version: $ver,
+			core: $core, updated: $ts,
+			groups: [ $st[0].groups[]? | . as $g | ("grp-" + $g.id) as $t |
+				{ id: $g.id, name: ($g.name // $g.id),
+				  selected: ($P[$t].now // ""),
+				  nodes: [ ($P[$t].all // [])[] | . as $m |
+					{ tag: $m,
+					  delay: (($P[$m].history // []) | last | (.delay // 0)) } ] } ],
+			geo: [ $st[0].geo[]? | select(.enabled // false) | { id: .id, name: (.name // .id) } ]
+		}' > "$SBM_EXT_DIR/status.json" 2>/dev/null
+	rm -f "$SBM_RUN_DIR/sbm_proxies.$$"
+	return 0
+}

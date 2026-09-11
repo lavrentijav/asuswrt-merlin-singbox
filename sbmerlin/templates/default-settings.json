@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "general": {
+    "enabled": false,
+    "mode": "tproxy",
+    "mem_limit_mb": 48,
+    "log_level": "warn",
+    "debug_port": 0,
+    "dns": {
+      "local": "auto",
+      "remote": "https://1.1.1.1/dns-query",
+      "remote_outbound": "auto",
+      "strategy": "prefer_ipv4",
+      "hijack": true
+    },
+    "final": "direct",
+    "watchdog": {
+      "enabled": true,
+      "rss_limit_mb": 96
+    }
+  },
+  "groups": [],
+  "nodes": [],
+  "subs": [],
+  "rules": [],
+  "clients": [],
+  "geo": [
+    {
+      "id": "rkn-domains",
+      "name": "РКН: заблокированные домены (Re-filter)",
+      "url": "https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/domains_all.lst",
+      "format": "plain-domain",
+      "target": "srs",
+      "interval_h": 24,
+      "enabled": true
+    },
+    {
+      "id": "rkn-ip",
+      "name": "РКН: заблокированные IP (Re-filter)",
+      "url": "https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/ipsum.lst",
+      "format": "plain-ip",
+      "target": "srs",
+      "interval_h": 24,
+      "enabled": false
+    },
+    {
+      "id": "antifilter-ip",
+      "name": "Антифильтр: все заблокированные подсети",
+      "url": "https://antifilter.download/list/allyouneed.lst",
+      "format": "plain-ip",
+      "target": "srs",
+      "interval_h": 24,
+      "enabled": false
+    },
+    {
+      "id": "blocked-for-ru",
+      "name": "Сервисы, ограничившие доступ из РФ",
+      "url": "https://raw.githubusercontent.com/1andrevich/Re-filter-lists/main/community.lst",
+      "format": "plain-domain",
+      "target": "srs",
+      "interval_h": 24,
+      "enabled": true
+    },
+    {
+      "id": "geosite-ru",
+      "name": "Российские сайты — всегда напрямую",
+      "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ru.srs",
+      "format": "srs",
+      "target": "srs",
+      "interval_h": 168,
+      "direct": true,
+      "enabled": true
+    },
+    {
+      "id": "gov-ru",
+      "name": "Госуслуги и госсайты — всегда напрямую",
+      "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-gov-ru.srs",
+      "format": "srs",
+      "target": "srs",
+      "interval_h": 168,
+      "direct": true,
+      "enabled": true
+    },
+    {
+      "id": "ru-ip-direct",
+      "name": "Российские IP — мимо прокси (ядро Linux, ipset)",
+      "url": "https://raw.githubusercontent.com/ipverse/rir-ip/master/country/ru/ipv4-aggregated.txt",
+      "format": "plain-ip",
+      "target": "ipset",
+      "interval_h": 168,
+      "enabled": true
+    }
+  ]
+}
