@@ -74,7 +74,8 @@ sbm_cmd_apply() {
 
 # dnsmasq must be restarted for postconf changes to take effect.
 sbm_dnsmasq_apply() {
-	service restart_dnsmasq >/dev/null 2>&1 &
+	service restart_dnsmasq >/dev/null 2>&1
+	sbm_dnsmasq_verify
 	return 0
 }
 

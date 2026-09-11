@@ -90,10 +90,30 @@ sbm_dnsmasq_conf() {
 	sed -i '/#sbmerlin$/d' "$_f" 2>/dev/null
 	[ "$_hijack" = "true" ] || return 0
 	sbm_running || return 0
-	{
-		echo "no-resolv #sbmerlin"
-		echo "server=127.0.0.1#$SBM_DNS_PORT #sbmerlin"
-		echo "cache-size=1500 #sbmerlin"
-	} >> "$_f"
+	# Only add keys the firmware does not already set: dnsmasq refuses to start
+	# on a repeated single-value keyword ("illegal repeated keyword"), and a dead
+	# dnsmasq means no DHCP and no clients on the LAN at all.
+	grep -qE '^[[:space:]]*no-resolv' "$_f" || echo "no-resolv #sbmerlin" >> "$_f"
+	echo "server=127.0.0.1#$SBM_DNS_PORT #sbmerlin" >> "$_f"
 	return 0
+}
+
+sbm_dnsmasq_running() { ps w 2>/dev/null | grep -q '[d]nsmasq --log-async\|[d]nsmasq -'; }
+
+# A dead dnsmasq means no DHCP and no LAN at all, so never leave it down: if it
+# did not come back, drop our additions and restart it without them.
+sbm_dnsmasq_verify() {
+	_i=0
+	while [ "$_i" -lt 12 ]; do
+		sbm_dnsmasq_running && return 0
+		_i=$((_i + 1))
+		sleep 1
+	done
+	sbm_error "dnsmasq did not start — removing sbmerlin DNS lines and restarting it"
+	sed -i '/#sbmerlin$/d' /etc/dnsmasq.conf 2>/dev/null
+	# Keep it out of the generated config until the user re-enables it.
+	"$SBM_JQ" '.general.dns.hijack = false' "$SBM_SETTINGS" > "$SBM_SETTINGS.new" \
+		&& mv -f "$SBM_SETTINGS.new" "$SBM_SETTINGS"
+	service restart_dnsmasq >/dev/null 2>&1
+	return 1
 }

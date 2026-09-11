@@ -14,6 +14,12 @@ sbm_watchdog() {
 		sbm_export_ui
 	fi
 
+	# Losing dnsmasq costs the whole LAN its DHCP, so check it before anything else.
+	if ! sbm_dnsmasq_running; then
+		sbm_warn "dnsmasq is down — repairing"
+		sbm_dnsmasq_verify
+	fi
+
 	_enabled=$(sbm_json_get "$SBM_SETTINGS" '.general.enabled' false)
 	[ "$_enabled" = "true" ] || { sbm_write_status; return 0; }
 
