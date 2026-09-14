@@ -20,7 +20,7 @@ function sbmInit() {
 		$('#panel-' + $(this).data('panel')).addClass('active');
 	});
 	sbmLoadSettings(function () { sbmLoadStatus(); });
-	setInterval(sbmLoadStatus, 15000);
+	setInterval(sbmTick, 15000);
 }
 
 /* ---------- loading ---------- */
@@ -28,6 +28,7 @@ function sbmLoadSettings(done) {
 	$.ajax({ url: '/ext/sbmerlin/settings.json?t=' + Date.now(), dataType: 'json', cache: false })
 		.done(function (d) {
 			S = d;
+			sbmSnapshot();
 			sbmRenderAll();
 			if (done) done();
 		})
@@ -39,6 +40,13 @@ function sbmLoadSettings(done) {
 function sbmLoadStatus() {
 	$.ajax({ url: '/ext/sbmerlin/status.json?t=' + Date.now(), dataType: 'json', cache: false })
 		.done(function (d) { ST = d; sbmRenderStatus(); });
+}
+
+/* The 15-second refresh must not redraw tables the user is in the middle of
+ * editing, and must not resurrect pre-save data while an apply is running. */
+function sbmTick() {
+	if (APPLYING || EDITING >= 0) return;
+	sbmLoadStatus();
 }
 
 function sbmLoadLog() {
@@ -67,6 +75,7 @@ function sbmRenderStatus() {
 		: 'REDIRECT — только TCP (в ядре нет xt_TPROXY, UDP/QUIC идёт мимо прокси)';
 	$('#st-mode').text(modeTxt);
 	$('#st-rss').text((ST.rss_mb || 0) + ' МБ');
+	$('#st-uptime').text(ST.running ? sbmDuration(ST.uptime_s || 0) : '—');
 	$('#st-core').text(ST.core || '—');
 	$('#st-updated').text(ST.updated || '—');
 
@@ -83,6 +92,18 @@ function sbmRenderStatus() {
 			'<td>' + (g.selected || '<span class="sbm-pill bad">нет</span>') + '</td>' +
 			'<td style="line-height:1.9">' + (nodes || '<span class="sbm-muted">нет узлов</span>') + '</td></tr>');
 	});
+}
+
+/* Human-readable uptime: the core restarting on its own is the first symptom
+ * worth noticing, so it is shown rather than hidden behind the log. */
+function sbmDuration(sec) {
+	sec = parseInt(sec) || 0;
+	if (sec <= 0) return '—';
+	var d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600);
+	var m = Math.floor(sec % 3600 / 60);
+	if (d) return d + ' ' + sbmPlural(d, 'день', 'дня', 'дней') + ' ' + h + ' ч';
+	if (h) return h + ' ч ' + m + ' мин';
+	return m + ' мин';
 }
 
 function sbmRenderSettings() {
@@ -148,6 +169,7 @@ var INBOUNDS = [
 	['pinned', 'привязанные устройства']
 ];
 var EDITING = -1;
+var APPLYING = false;
 
 /* The table shows every parameter of a rule except the lists themselves, which
  * are only counted here and edited in the dialog. */
@@ -442,8 +464,8 @@ function sbmAddLinks() {
 	if (!text) { alert('Вставьте хотя бы одну ссылку'); return; }
 	var links = text.split(/\s+/).filter(function (l) { return /^(vless|vmess|ss|trojan):\/\//.test(l); });
 	if (!links.length) { alert('Не найдено ссылок vless:// vmess:// ss:// trojan://'); return; }
-	sbmRun('start_sbmerlinlinks', { sbm_links: sbmB64(links.join('\n')) },
-		'Добавляю ' + links.length + ' ссыл(ку/ки)…');
+	sbmSend(sbmChunkPairs('sbm_links', sbmB64(links.join('\n'))), 'start_sbmerlinlinks',
+		'Добавляю ' + links.length + ' ссыл(ку/ки)…', true);
 	$('#sv-input').val('');
 }
 
@@ -481,18 +503,38 @@ function sbmCollectSettings() {
 	S.general.dns.remote = $('#set-dnsremote').val() || 'https://1.1.1.1/dns-query';
 }
 
-/* Split one section into numbered chunks; the backend joins them back. */
-function sbmChunk(payload, key, out) {
-	var b = sbmB64(JSON.stringify(payload));
-	if (b.length <= CHUNK) { out[key] = b; return; }
-	for (var i = 0, n = 1; i < b.length; i += CHUNK, n++) out[key + '_' + n] = b.substr(i, CHUNK);
+/* ---------- sending ---------- */
+/* The firmware rejects any amng_custom value over 8192 bytes ("nvram_check fail:
+ * amng_custom over length") and drops the whole save with nothing the page can
+ * see — which is how settings used to vanish. So only sections that changed are
+ * sent, split across several small requests; the last one starts the apply. */
+var POST_BUDGET = 6000;
+var SNAP = {};
+var APPLY_MARK = '';
+
+function sbmSnapshot() {
+	SNAP = {};
+	SECTIONS.forEach(function (sec) { SNAP[sec] = JSON.stringify(S[sec]); });
+}
+
+/* A value split into numbered chunks plus a count marker: the backend imports
+ * it only once every piece has arrived. */
+function sbmChunkPairs(key, b64) {
+	var pairs = [];
+	for (var i = 0, n = 1; i < b64.length; i += CHUNK, n++) pairs.push([key + '_' + n, b64.substr(i, CHUNK)]);
+	pairs.push([key + '_n', String(pairs.length)]);
+	return pairs;
 }
 
 function sbmApply(extraService) {
 	sbmCollectSettings();
-	var payload = {};
-	SECTIONS.forEach(function (sec) { sbmChunk(S[sec] || (sec === 'general' ? {} : []), 'sbm_' + sec, payload); });
-	sbmRun('start_sbmerlin' + (extraService || 'apply'), payload, 'Применяю настройки…');
+	var pairs = [];
+	SECTIONS.forEach(function (sec) {
+		var v = S[sec] === undefined ? (sec === 'general' ? {} : []) : S[sec];
+		if (JSON.stringify(v) === SNAP[sec]) return;
+		pairs = pairs.concat(sbmChunkPairs('sbm_' + sec, sbmB64(JSON.stringify(v))));
+	});
+	sbmSend(pairs, 'start_sbmerlin' + (extraService || 'apply'), 'Применяю настройки…', true);
 }
 
 function sbmService(what) {
@@ -500,24 +542,91 @@ function sbmService(what) {
 		apply: 'start_sbmerlinapply', sub: 'start_sbmerlinsub',
 		geo: 'start_sbmerlingeo', test: 'start_sbmerlintest' };
 	if (what === 'apply' || what === 'sub') { sbmApply(what === 'sub' ? 'sub' : 'apply'); return; }
-	sbmRun(map[what], {}, 'Выполняю…');
+	sbmSend([], map[what], 'Выполняю…', false);
 }
 
-/* Hand the work to the firmware: it writes custom_settings.txt and fires
- * service-event, which our backend script handles. */
-function sbmRun(service, extraSettings, message) {
-	Object.keys(extraSettings || {}).forEach(function (k) { custom_settings[k] = extraSettings[k]; });
-	$('#sbm-saved').text(message || 'Выполняю…');
-	document.form.action_script.value = service;
-	document.form.action_mode.value = 'apply';
-	document.form.action_wait.value = '10';
-	document.form.amng_custom.value = JSON.stringify(custom_settings);
-	document.form.action = '/applyapp.cgi';
-	document.form.target = 'hidden_frame';
-	document.form.submit();
-	setTimeout(function () {
-		sbmLoadSettings(function () { sbmLoadStatus(); });
-		$('#sbm-saved').text('Готово — состояние обновлено');
-	}, 12000);
+function sbmPost(obj, service) {
+	return $.ajax({
+		url: '/applyapp.cgi', type: 'POST', timeout: 20000,
+		data: {
+			productid: document.form.productid.value,
+			current_page: '', next_page: '', modified: '0',
+			action_mode: 'apply', action_script: service, action_wait: '1',
+			first_time: '', preferred_lang: document.form.preferred_lang.value,
+			firmver: document.form.firmver.value,
+			amng_custom: JSON.stringify(obj)
+		}
+	});
 }
-/* marker */
+
+function sbmSend(pairs, service, message, waitApply) {
+	var batches = [], cur = {}, size = 2;
+	pairs.forEach(function (p) {
+		var add = p[0].length + p[1].length + 6;
+		if (size + add > POST_BUDGET && Object.keys(cur).length) { batches.push(cur); cur = {}; size = 2; }
+		cur[p[0]] = p[1];
+		size += add;
+	});
+	batches.push(cur);
+
+	var total = batches.length;
+	APPLYING = true;
+	/* Remember the last finished apply, so its stale "done" is not mistaken for
+	 * this one finishing before the backend has even started. */
+	$.ajax({ url: '/ext/sbmerlin/apply.json?t=' + Date.now(), dataType: 'json', cache: false })
+		.always(function (d) {
+			APPLY_MARK = (d && d.updated) || '';
+			step(0);
+		});
+
+	function step(i) {
+		var last = i === total - 1;
+		$('#sbm-saved').text((message || 'Выполняю…') +
+			(total > 1 ? ' — часть ' + (i + 1) + ' из ' + total : ''));
+		/* Intermediate parts use a service name the backend ignores: they only
+		 * need to land in custom_settings.txt. */
+		sbmPost(batches[i], last ? service : 'start_sbmerlinstage')
+			.done(function () {
+				if (!last) { step(i + 1); return; }
+				if (waitApply) { sbmWaitApply(0); return; }
+				setTimeout(function () {
+					APPLYING = false;
+					sbmLoadStatus();
+					$('#sbm-saved').text('Готово');
+				}, 6000);
+			})
+			.fail(function () {
+				APPLYING = false;
+				$('#sbm-saved').text('Роутер не принял часть ' + (i + 1) + ' из ' + total +
+					' — настройки не применены, попробуйте ещё раз');
+			});
+	}
+}
+
+/* Applying restarts the core and may download rule-sets, which takes far longer
+ * than any fixed timeout: poll the state the backend writes and only reload the
+ * page data once this apply has finished. */
+function sbmWaitApply(tries) {
+	if (tries > 120) {
+		APPLYING = false;
+		$('#sbm-saved').text('Применение занимает дольше обычного — проверьте вкладку Логи');
+		return;
+	}
+	$.ajax({ url: '/ext/sbmerlin/apply.json?t=' + Date.now(), dataType: 'json', cache: false })
+		.done(function (d) {
+			var fresh = d && d.updated && d.updated !== APPLY_MARK;
+			if (!fresh || d.state === 'running') {
+				$('#sbm-saved').text('Применяю настройки… ' + (tries * 2) + ' с');
+				setTimeout(function () { sbmWaitApply(tries + 1); }, 2000);
+				return;
+			}
+			APPLYING = false;
+			sbmLoadSettings(function () { sbmLoadStatus(); });
+			$('#sbm-saved').text(d.state === 'failed'
+				? 'Ошибка применения — смотрите вкладку Логи'
+				: 'Готово, настройки применены');
+		})
+		.fail(function () {
+			setTimeout(function () { sbmWaitApply(tries + 1); }, 2000);
+		});
+}

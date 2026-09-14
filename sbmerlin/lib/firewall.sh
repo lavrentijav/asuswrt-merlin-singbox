@@ -74,6 +74,14 @@ sbm_ipset_load_direct() {
 sbm_firewall_up() {
 	_mode=$(sbm_effective_mode "$(sbm_json_get "$SBM_SETTINGS" '.general.mode' tproxy)")
 	sbm_firewall_down
+	# Sets for groups nobody is pinned to any more: the chain no longer references
+	# them once it is torn down, so they can go.
+	_keep=" $(sbm_forced_groups | tr '
+' ' ') "
+	for _set in $(_sbm_ipset list -n | grep '^sbm_f_'); do
+		_g=${_set#sbm_f_}; _g=${_g%_*}
+		case "$_keep" in *" $_g "*) : ;; *) _sbm_ipset destroy "$_set" ;; esac
+	done
 	sbm_ipset_init
 	sbm_ipset_load
 	_lan=$(sbm_lan_if)

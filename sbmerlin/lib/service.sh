@@ -18,6 +18,16 @@ sbm_rss_mb() {
 	echo $(( ${_kb:-0} / 1024 ))
 }
 
+# Seconds the core process has been alive, from its start time in jiffies.
+sbm_core_uptime() {
+	_p=$(sbm_pid) || { echo 0; return 1; }
+	_starttime=$(awk '{print $22}' "/proc/$_p/stat" 2>/dev/null)
+	_hz=$(getconf CLK_TCK 2>/dev/null); [ -n "$_hz" ] || _hz=100
+	_boot=$(awk '{print int($1)}' /proc/uptime 2>/dev/null)
+	[ -n "$_starttime" ] && [ -n "$_boot" ] || { echo 0; return 1; }
+	echo $(( _boot - _starttime / _hz ))
+}
+
 sbm_core_start() {
 	sbm_running && { sbm_info "already running"; return 0; }
 	[ -x "$SBM_BIN" ] || { sbm_error "sing-box binary missing: $SBM_BIN"; return 1; }

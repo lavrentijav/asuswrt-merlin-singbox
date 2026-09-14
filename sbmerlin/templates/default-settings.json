@@ -137,15 +137,25 @@
     },
     {
       "id": "ip-discord",
-      "name": "Discord голос — сети Cloudflare/Google Cloud (AS13335/15169)",
+      "name": "Discord голос — сети Discord (AS49544)",
       "urls": [
-        "https://raw.githubusercontent.com/ipverse/asn-ip/master/as/13335/ipv4-aggregated.txt",
-        "https://raw.githubusercontent.com/ipverse/asn-ip/master/as/15169/ipv4-aggregated.txt"
+        "https://raw.githubusercontent.com/ipverse/asn-ip/master/as/49544/ipv4-aggregated.txt"
       ],
       "format": "plain-ip",
       "target": "srs",
       "interval_h": 168,
-      "enabled": false
+      "enabled": true
+    },
+    {
+      "id": "ip-playstation",
+      "name": "PlayStation Network — сети Sony Interactive (AS33353)",
+      "urls": [
+        "https://raw.githubusercontent.com/ipverse/asn-ip/master/as/33353/ipv4-aggregated.txt"
+      ],
+      "format": "plain-ip",
+      "target": "srs",
+      "interval_h": 168,
+      "enabled": true
     }
   ]
 }

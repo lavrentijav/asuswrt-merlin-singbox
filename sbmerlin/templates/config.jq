@@ -124,9 +124,12 @@ def rule_target($r):
     + [ $groups[] | . as $g
         | { type: "urltest", tag: ("grp-" + $g.id),
             outbounds: [$nodes[] | select(.group == $g.id) | .tag],
-            url: ($g.url // "http://cp.cloudflare.com/generate_204"),
-            interval: (((($g.interval_s // 300) | tostring)) + "s"),
+            url: ($g.url // "https://www.gstatic.com/generate_204"),
+            interval: (((($g.interval_s // 120) | tostring)) + "s"),
             tolerance: ($g.tolerance_ms // 150),
+            # Without this a re-election leaves existing streams pinned to the
+            # node that just failed, so the browser keeps hanging on it.
+            interrupt_exist_connections: true,
             idle_timeout: "30m" } ]
     + [ $failover_groups[] | . as $g
         | { type: "selector", tag: ("sel-" + $g + "-direct"),

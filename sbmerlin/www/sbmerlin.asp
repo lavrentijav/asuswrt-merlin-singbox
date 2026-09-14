@@ -136,6 +136,7 @@ var custom_settings = <% get_custom_settings(); %>;
 							<span>Состояние</span><span id="st-running">—</span>
 							<span>Режим перехвата</span><span id="st-mode">—</span>
 							<span>Память ядра</span><span id="st-rss">—</span>
+							<span>Время работы ядра</span><span id="st-uptime">—</span>
 							<span>Версия ядра</span><span id="st-core">—</span>
 							<span>Обновлено</span><span id="st-updated">—</span>
 						</div>

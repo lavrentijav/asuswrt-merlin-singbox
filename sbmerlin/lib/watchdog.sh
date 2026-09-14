@@ -36,8 +36,33 @@ sbm_watchdog() {
 		sbm_core_start
 	fi
 
+	# cron is the only thing driving this function; if it vanished (a reboot wipes
+	# /var/spool) nothing would ever run again, including this check.
+	cru l 2>/dev/null | grep -q sbmerlin_watchdog || {
+		sbm_warn "cron entries missing — reinstalling"
+		sbm_cron_install
+	}
+
+	sbm_rotate_log
+	sbm_refresh_groups
 	sbm_failover_check
 	sbm_write_status
+}
+
+# Ask the core to re-measure every group. urltest only re-elects on its own
+# schedule and will keep a node that still answers the cheap health URL while
+# real traffic through it already fails — which is exactly what makes YouTube
+# die until a restart. Probing here forces a fresh election every few minutes.
+sbm_refresh_groups() {
+	for _g in $("$SBM_JQ" -r '.groups[]?.id' "$SBM_SETTINGS" 2>/dev/null); do
+		_before=$(sbm_api_get "/proxies/grp-$_g" | "$SBM_JQ" -r '.now // ""')
+		_alive=$(sbm_group_alive_count "$_g")
+		_after=$(sbm_api_get "/proxies/grp-$_g" | "$SBM_JQ" -r '.now // ""')
+		if [ "$_before" != "$_after" ]; then
+			sbm_info "group $_g re-elected: $_before -> $_after ($_alive alive)"
+		fi
+	done
+	return 0
 }
 
 # Groups that some rule wants to fall back to direct when they die.
@@ -74,7 +99,7 @@ sbm_failover_check() {
 sbm_group_alive_count() {
 	_g="$1"
 	_url=$(sbm_json_get "$SBM_SETTINGS" ".groups[] | select(.id == \"$_g\") | .url" \
-		"http://cp.cloudflare.com/generate_204")
+		"$SBM_HEALTH_URL")
 	_res=$(sbm_api_get "/group/grp-$_g/delay?url=$_url&timeout=5000")
 	if [ -z "$_res" ]; then echo 0; return 0; fi
 	printf '%s' "$_res" | "$SBM_JQ" -r '
@@ -89,6 +114,7 @@ sbm_write_status() {
 	sbm_running && _running=true
 	_pid=$(sbm_pid 2>/dev/null)
 	_mode=$(sbm_effective_mode "$(sbm_json_get "$SBM_SETTINGS" '.general.mode' tproxy)")
+	_uptime=$(sbm_core_uptime)
 	_proxies=$(sbm_api_get /proxies)
 	[ -n "$_proxies" ] || _proxies='{}'
 	printf '%s' "$_proxies" > "$SBM_RUN_DIR/sbm_proxies.$$"
@@ -96,6 +122,7 @@ sbm_write_status() {
 	"$SBM_JQ" -n \
 		--arg running "$_running" --arg pid "${_pid:-}" --arg mode "$_mode" \
 		--arg rss "$(sbm_rss_mb 2>/dev/null || echo 0)" \
+		--arg uptime "$_uptime" \
 		--arg ver "$SBM_VERSION" \
 		--arg core "$("$SBM_BIN" version 2>/dev/null | head -1)" \
 		--arg ts "$(date '+%Y-%m-%d %H:%M:%S')" \
@@ -105,6 +132,7 @@ sbm_write_status() {
 		{
 			running: ($running == "true"),
 			pid: $pid, mode: $mode, rss_mb: ($rss | tonumber), version: $ver,
+			uptime_s: ($uptime | tonumber),
 			core: $core, updated: $ts,
 			groups: [ $st[0].groups[]? | . as $g | ("grp-" + $g.id) as $t |
 				{ id: $g.id, name: ($g.name // $g.id),

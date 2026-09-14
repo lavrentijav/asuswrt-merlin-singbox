@@ -40,6 +40,11 @@ SBM_TAG="# sbmerlin"
 
 SBM_LOG_MAX_BYTES="${SBM_LOG_MAX_BYTES:-262144}"
 
+# Health-check target for node election. It must live on the same infrastructure
+# as the traffic that matters: a node can answer cp.cloudflare.com long after
+# Google and YouTube have become unreachable through it.
+SBM_HEALTH_URL="${SBM_HEALTH_URL:-https://www.gstatic.com/generate_204}"
+
 # Firmware binaries must be used for anything that talks to the kernel: the Entware
 # copies (iptables 1.4.21 / ipset 7.24) mismatch the 4.1 kernel modules the firmware
 # built its own (1.4.15 / 7.6) against.
@@ -220,4 +225,19 @@ sbm_fetch() {
 sbm_mkdirs() {
 	mkdir -p "$SBM_DATA_DIR" "$SBM_GEO_DIR" "$SBM_ADDON_DIR" 2>/dev/null
 	return 0
+}
+
+# Switching firmware apps (Download Master and friends) repoints /tmp/opt at the
+# old ASUS Optware tree, and Entware — jq, curl, sing-box and all our data —
+# silently disappears from every path. Point it back at the Entware tree.
+sbm_repair_opt() {
+	[ -x /opt/bin/jq ] && return 0
+	for _d in /tmp/mnt/*/entware; do
+		[ -x "$_d/bin/jq" ] || continue
+		ln -nsf "$_d" /tmp/opt
+		logger -t sbmerlin "Entware link was repointed; restored /tmp/opt -> $_d"
+		sbm_warn "Entware link was repointed; restored /tmp/opt -> $_d"
+		return 0
+	done
+	return 1
 }

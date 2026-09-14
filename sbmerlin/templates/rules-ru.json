@@ -173,6 +173,7 @@
     "match": {
       "rule_set": [
         "geosite:discord",
+        "ip-discord",
         "geosite:twitter",
         "ip-twitter",
         "geosite:signal",
@@ -359,10 +360,31 @@
         "geosite:epicgames",
         "geosite:playstation",
         "geosite:xbox",
-        "geosite:category-games"
+        "geosite:category-games",
+        "ip-playstation"
       ],
       "domain_suffix": [
-        "bleak.su"
+        "account.sony.com",
+        "api.sony.com",
+        "bleak.su",
+        "gamesight.io",
+        "np.community.playstation.net",
+        "playstation-network.net",
+        "playstation.com",
+        "playstation.io",
+        "playstation.net",
+        "playstation.org",
+        "ps.com",
+        "psn.com",
+        "psnobj.net",
+        "psnprofiles.com",
+        "ribob01.net",
+        "scea.com",
+        "scepsn.com",
+        "sie.com",
+        "sonyentertainmentnetwork.com",
+        "sonyinteractive.com",
+        "sonynei.net"
       ],
       "ip_cidr": [
         "188.245.187.0/24"

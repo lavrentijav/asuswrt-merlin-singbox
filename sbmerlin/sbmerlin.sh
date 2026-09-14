@@ -19,6 +19,10 @@ SBM_ADDON_DIR="${SBM_ADDON_DIR:-$(dirname "$SBM_SELF")}"
 . "$SBM_ADDON_DIR/lib/watchdog.sh"
 . "$SBM_ADDON_DIR/lib/webui.sh"
 
+# Every entry point runs from cron or a firmware hook; make sure Entware is
+# reachable before anything below needs jq or the data directory.
+sbm_repair_opt
+
 SBM_HOOKS="services-start firewall-start service-event post-mount unmount dnsmasq.postconf"
 
 # --- lifecycle ---------------------------------------------------------------
@@ -29,6 +33,9 @@ sbm_cmd_start() {
 	# boot, so the page and its data files have to be put back on each start.
 	sbm_mount_ui
 	sbm_export_ui
+	# cron lives in /var/spool (tmpfs) and is wiped by every reboot, so the
+	# watchdog, geo and subscription jobs have to be re-registered on each start.
+	sbm_cron_install
 	[ "$(sbm_json_get "$SBM_SETTINGS" '.general.enabled' false)" = "true" ] || {
 		sbm_info "disabled in settings — not starting"
 		sbm_write_status
@@ -57,6 +64,13 @@ sbm_cmd_apply() {
 	sbm_require_jq
 	sbm_settings_init
 	sbm_import_custom_settings
+	# Publish what the user just saved straight away. Everything below can take a
+	# minute (rule-set downloads, core restart) and the page refetches settings
+	# meanwhile — without this it would read the pre-save file and show the
+	# changes as lost, then save that stale state back on the next apply.
+	sbm_export_ui
+	sbm_apply_state running
+	sbm_cron_install
 	# Rules may reference catalogue rule-sets (geosite:youtube) that are not
 	# registered or downloaded yet; resolve and fetch them before generating.
 	sbm_geo_autoregister >/dev/null
@@ -64,15 +78,25 @@ sbm_cmd_apply() {
 	if [ "$(sbm_json_get "$SBM_SETTINGS" '.general.enabled' false)" != "true" ]; then
 		sbm_cmd_stop
 		sbm_export_ui
+		sbm_apply_state done
 		return 0
 	fi
-	sbm_generate || { sbm_export_ui; return 1; }
+	sbm_generate || { sbm_export_ui; sbm_apply_state failed; return 1; }
 	sbm_core_stop
-	sbm_core_start || { sbm_export_ui; return 1; }
+	sbm_core_start || { sbm_export_ui; sbm_apply_state failed; return 1; }
 	sbm_firewall_up >/dev/null
 	sbm_dnsmasq_apply
 	sbm_export_ui
 	sbm_write_status
+	sbm_apply_state done
+	return 0
+}
+
+# Progress marker the WebUI polls, so it knows when to reload instead of
+# guessing with a fixed timeout.
+sbm_apply_state() {
+	mkdir -p "$SBM_EXT_DIR" 2>/dev/null
+	"$SBM_JQ" -n --arg s "$1" --arg ts "$(date '+%Y-%m-%d %H:%M:%S')" 		'{state: $s, updated: $ts}' > "$SBM_EXT_DIR/apply.json" 2>/dev/null
 	return 0
 }
 

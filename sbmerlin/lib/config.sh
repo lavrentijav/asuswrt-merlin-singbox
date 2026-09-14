@@ -57,10 +57,14 @@ sbm_import_custom_settings() {
 
 # Join sbm_<name> or its numbered chunks into one string.
 # The firmware stores settings as "key value" (space separated), see helper.sh.
+# The page sends a section over several requests (the firmware refuses a single
+# amng_custom above 8 KB) and adds sbm_<name>_n with the chunk count; a section
+# whose chunks have not all landed yet is left alone for the next apply.
 sbm_collect_setting() {
 	_key="$1"
 	_single=$(grep -E "^${_key} " "$SBM_CUSTOM_SETTINGS" 2>/dev/null | head -1 | cut -f2- -d ' ')
 	if [ -n "$_single" ]; then printf '%s' "$_single"; return 0; fi
+	_want=$(grep -E "^${_key}_n " "$SBM_CUSTOM_SETTINGS" 2>/dev/null | head -1 | cut -f2- -d ' ')
 	_n=1
 	_acc=""
 	while :; do
@@ -69,13 +73,22 @@ sbm_collect_setting() {
 		_acc="$_acc$_part"
 		_n=$((_n + 1))
 	done
+	case "$_want" in
+		''|*[!0-9]*) : ;;
+		*)
+			if [ $((_n - 1)) -ne "$_want" ]; then
+				sbm_warn "$_key: $((_n - 1)) of $_want chunks arrived, keeping it for the next apply"
+				return 1
+			fi
+			;;
+	esac
 	printf '%s' "$_acc"
 }
 
 sbm_clear_setting() {
 	_key="$1"
 	[ -f "$SBM_CUSTOM_SETTINGS" ] || return 0
-	grep -vE "^${_key} " "$SBM_CUSTOM_SETTINGS" 2>/dev/null | grep -vE "^${_key}_[0-9]+ " \
+	grep -vE "^${_key} " "$SBM_CUSTOM_SETTINGS" 2>/dev/null | grep -vE "^${_key}_([0-9]+|n) " \
 		> "$SBM_CUSTOM_SETTINGS.new" && mv -f "$SBM_CUSTOM_SETTINGS.new" "$SBM_CUSTOM_SETTINGS"
 }
 
@@ -134,7 +147,7 @@ sbm_ensure_group() {
 	[ "$_has" = "0" ] || return 0
 	"$SBM_JQ" --arg g "$_g" '
 		.groups += [{ id: $g, name: $g, type: "urltest",
-		              url: "http://cp.cloudflare.com/generate_204",
+		              url: "https://www.gstatic.com/generate_204",
 		              interval_s: 300, tolerance_ms: 150 }]
 	' "$SBM_SETTINGS" > "$SBM_SETTINGS.new" && mv -f "$SBM_SETTINGS.new" "$SBM_SETTINGS"
 }
