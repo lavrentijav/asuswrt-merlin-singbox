@@ -547,11 +547,15 @@ function sbmService(what) {
 
 function sbmPost(obj, service) {
 	return $.ajax({
-		url: '/applyapp.cgi', type: 'POST', timeout: 20000,
+		/* start_apply.htm is the form target every firmware page uses; it is what
+		 * turns action_script into a service-event. applyapp.cgi takes rc_service
+		 * instead, so posting action_script there stored the values and never
+		 * started the apply — which is why saved settings seemed to vanish. */
+		url: '/start_apply.htm', type: 'POST', timeout: 20000,
 		data: {
 			productid: document.form.productid.value,
 			current_page: '', next_page: '', modified: '0',
-			action_mode: 'apply', action_script: service, action_wait: '1',
+			action_mode: 'apply', action_script: service, rc_service: service, action_wait: '1',
 			first_time: '', preferred_lang: document.form.preferred_lang.value,
 			firmver: document.form.firmver.value,
 			amng_custom: JSON.stringify(obj)

@@ -41,6 +41,7 @@ sbm_cmd_start() {
 		sbm_write_status
 		return 0
 	}
+	sbm_bootguard_check || { sbm_write_status; return 0; }
 	sbm_generate || return 1
 	sbm_core_start || return 1
 	sbm_firewall_up >/dev/null
@@ -90,6 +91,45 @@ sbm_cmd_apply() {
 	sbm_write_status
 	sbm_apply_state done
 	return 0
+}
+
+# --- boot-loop guard ---------------------------------------------------------
+# A proxy that takes the network down during boot can leave a router rebooting
+# forever with no way in but a factory reset. Every start during early boot is
+# counted in /jffs (it survives reboots); the watchdog clears the count once the
+# router has stayed up. After SBM_BOOTGUARD_MAX unstable boots in a row the core
+# and the interception are not started at all until someone clears it.
+SBM_BOOTGUARD="$SBM_ADDON_DIR/.bootguard"
+SBM_BOOTGUARD_MAX=2
+SBM_BOOTGUARD_WINDOW=600
+
+sbm_uptime_s() { awk '{print int($1)}' /proc/uptime 2>/dev/null || echo 99999; }
+
+sbm_bootguard_check() {
+	_up=$(sbm_uptime_s)
+	# Only boot-time starts count; a start from a shell or the WebUI is deliberate.
+	[ "$_up" -lt "$SBM_BOOTGUARD_WINDOW" ] || return 0
+	_n=$(cat "$SBM_BOOTGUARD" 2>/dev/null); _n=${_n:-0}
+	case "$_n" in *[!0-9]*) _n=0 ;; esac
+	if [ "$_n" -ge "$SBM_BOOTGUARD_MAX" ]; then
+		sbm_error "safe mode: $_n unstable boots in a row — core and interception NOT started"
+		logger -t sbmerlin "safe mode after $_n unstable boots; run: sbmerlin.sh safe-reset"
+		return 1
+	fi
+	echo $((_n + 1)) > "$SBM_BOOTGUARD"
+	# Let the firmware finish bringing up WAN, dnsmasq and the firewall before
+	# the proxy starts rewriting traffic.
+	[ "$_up" -lt 90 ] && sleep $((90 - _up))
+	return 0
+}
+
+# Called by the watchdog: surviving the window means this boot was stable.
+sbm_bootguard_clear() {
+	[ -f "$SBM_BOOTGUARD" ] || return 0
+	[ "$(sbm_uptime_s)" -ge "$SBM_BOOTGUARD_WINDOW" ] || return 0
+	sbm_running || return 0
+	rm -f "$SBM_BOOTGUARD"
+	sbm_info "boot stable — boot-loop counter cleared"
 }
 
 # Progress marker the WebUI polls, so it knows when to reload instead of
@@ -243,6 +283,9 @@ sbm_cron_remove() {
 
 # Called from /jffs/scripts/service-event when the WebUI posts a change.
 sbm_service_event() {
+	# Every addon event is recorded: when a WebUI save seems to do nothing, this line
+	# is what tells a firmware that never delivered it apart from a failed apply.
+	case "$2" in sbmerlin*) sbm_info "webui event: $1 $2" ;; esac
 	case "$2" in
 		sbmerlinapply)   sbm_lock || return 1; sbm_cmd_apply; sbm_unlock ;;
 		sbmerlinstart)   sbm_lock || return 1; sbm_cmd_start; sbm_unlock ;;
@@ -311,6 +354,7 @@ case "$1" in
 	              "$SBM_SETTINGS" > "$SBM_SETTINGS.new" && mv -f "$SBM_SETTINGS.new" "$SBM_SETTINGS";
 	            sbm_sub_refresh; sbm_export_ui; sbm_unlock ;;
 	watchdog)   sbm_watchdog ;;
+	safe-reset) rm -f "$SBM_BOOTGUARD"; echo "boot-loop guard cleared"; sbm_info "boot-loop guard cleared by hand" ;;
 	status)     sbm_cmd_status ;;
 	test)       sbm_cmd_test ;;
 	dnsmasq)    sbm_dnsmasq_conf "$2" ;;

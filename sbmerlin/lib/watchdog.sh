@@ -44,6 +44,7 @@ sbm_watchdog() {
 	}
 
 	sbm_rotate_log
+	sbm_bootguard_clear
 	sbm_refresh_groups
 	sbm_failover_check
 	sbm_write_status
